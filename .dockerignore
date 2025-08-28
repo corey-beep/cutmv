@@ -1,0 +1,39 @@
+node_modules
+dist
+.DS_Store
+.git
+.gitignore
+README.md
+replit.md
+
+# Development files
+attached_assets/
+*.log
+.env.local
+.env.development
+
+# Video files and uploads
+uploads/chunks/
+uploads/clips/
+uploads/*.mp4
+uploads/*.mov
+uploads/*.avi
+*.mp4
+*.mov
+*.avi
+
+# Documentation and screenshots
+*.png
+*.jpg
+*.jpeg
+*.docx
+*.pdf
+*.command
+*.txt
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.vscode/
+.idea/

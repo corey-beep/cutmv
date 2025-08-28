@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Deployment optimization
+attached_assets/
+uploads/chunks/
+uploads/clips/
+uploads/*.mp4
+uploads/*.mov
+uploads/*.avi
+*.mp4
+*.mov
+*.avi

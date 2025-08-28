@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:types\"",
+    "dev:server": "NODE_ENV=development tsx server/index.ts",
+    "dev:types": "tsc -w --noEmit --project tsconfig.build.json",
+    "build": "npm run ci:check && vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "start": "NODE_ENV=production node dist/index.js",
+    "ci:check": "tsc --noEmit --project tsconfig.build.json && npm run lint",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "typecheck:strict": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:unused": "ts-unused-exports tsconfig.json --excludePathsFromReport=node_modules",
+    "check:prune": "ts-prune",
+    "db:push": "drizzle-kit push",
+    "prepare": "husky install"
+  }
+}
