@@ -4,6 +4,7 @@
  * Proprietary software - unauthorized use prohibited
  */
 
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from 'cookie-parser';
 import { registerRoutes } from "./routes";
@@ -13,6 +14,8 @@ import authRoutes from "./auth-routes";
 import userRoutes from "./user-routes";
 import referralRoutes from "./referral-routes";
 import creditRoutes from "./credit-routes";
+import subscriptionRoutes from "./subscription-routes";
+import stripeWebhook from "./stripe-webhook";
 
 import { optionalAuth } from "./auth-middleware";
 import { exportCleanupService } from "./export-cleanup-service";
@@ -22,6 +25,11 @@ import { AuthService } from "./auth-service";
 initializeSentry();
 
 const app = express();
+
+// IMPORTANT: Stripe webhook MUST come before body parsers
+// It needs access to the raw request body
+app.use('/api/stripe', stripeWebhook);
+
 // Streamlined Express config for fast uploads - increased limits for video files
 app.use(express.json({ limit: '10gb' }));
 app.use(express.urlencoded({ extended: false, limit: '10gb' }));
@@ -67,12 +75,12 @@ app.use((req, res, next) => {
   // Content Security Policy - Only load resources that are actually needed
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com https://replit.com *.sentry.io",
-    "style-src 'self' 'unsafe-inline'", 
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com https://replit.com *.sentry.io https://js.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: http:",
     "font-src 'self' data:",
-    "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com wss: ws: *.sentry.io",
-    "frame-src 'self'",
+    "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com wss: ws: *.sentry.io https://api.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
     "object-src 'none'",
     "base-uri 'self'"
   ].join('; ');
@@ -129,14 +137,14 @@ if (!process.env.NODE_ENV) {
 // Environment variable validation with warning-only mode for production
 function validateRequiredEnvironmentVariables() {
   const required = [
-    'DATABASE_URL',
-    'R2_ACCESS_KEY_ID',
-    'R2_SECRET_ACCESS_KEY', 
-    'R2_ENDPOINT',
-    'R2_BUCKET_NAME'
+    'DATABASE_URL'
   ];
 
   const optional = [
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'R2_ENDPOINT',
+    'R2_BUCKET_NAME',
     'OPENAI_API_KEY',
     'RESEND_API_KEY',
     'KICKBOX_API_KEY',
@@ -181,6 +189,7 @@ async function initializeServer() {
       app.use('/api/user', userRoutes);
       app.use('/api/referral', referralRoutes);
       app.use('/api/credits', creditRoutes);
+      app.use('/api/subscription', subscriptionRoutes);
 
       console.log('✅ API routes initialized FIRST');
     } catch (routeError) {
@@ -218,13 +227,22 @@ async function initializeServer() {
       });
     });
 
-    // PRODUCTION-ONLY: Setup static serving (AFTER API route protection)
-    try {
-      serveStatic(app);
-      console.log('✅ Production static file serving setup');
-    } catch (setupError) {
-      console.error('❌ Failed to setup file serving:', setupError);
-      // Continue without file serving if necessary
+    // Setup static serving or Vite dev server (AFTER API route protection)
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        serveStatic(app);
+        console.log('✅ Production static file serving setup');
+      } catch (setupError) {
+        console.error('❌ Failed to setup file serving:', setupError);
+        // Continue without file serving if necessary
+      }
+    } else {
+      try {
+        await setupVite(app, server);
+        console.log('✅ Vite dev server setup complete');
+      } catch (viteError) {
+        console.error('❌ Failed to setup Vite:', viteError);
+      }
     }
 
     // Global error handler (AFTER everything else)
@@ -241,7 +259,7 @@ async function initializeServer() {
     });
 
     // Start server with enhanced error handling
-    const port = 5000;
+    const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
     
     return new Promise<void>((resolve, reject) => {
       const serverInstance = server.listen(

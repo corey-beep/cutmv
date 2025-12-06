@@ -34,6 +34,51 @@ router.post('/signin', async (req, res) => {
   }
 });
 
+// Verify 6-digit code and create session
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    // Validate inputs
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    // Validate email format
+    const validatedData = insertUserSchema.parse({ email });
+
+    // Verify the 6-digit code
+    const { user, session } = await authService.verifyCode(validatedData.email, code);
+
+    // Set session cookie
+    res.cookie('session_token', session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    });
+
+    console.log('✅ 6-digit code verified and session created:', {
+      userId: user.id,
+      email: user.email,
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        onboardingCompleted: user.onboardingCompleted,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Code verification error:', error);
+    res.status(400).json({
+      error: error instanceof Error ? error.message : 'Invalid verification code',
+    });
+  }
+});
 
 // Verify magic link and create session
 router.get('/verify', async (req, res) => {

@@ -12,7 +12,7 @@ export interface CreditTransaction {
   id: number;
   userId: string;
   amount: number;
-  transactionType: 'referral_signup' | 'first_export_bonus' | 'export_usage' | 'admin_grant' | 'expiration';
+  transactionType: 'referral_signup' | 'first_export_bonus' | 'export_usage' | 'admin_grant' | 'expiration' | 'subscription_monthly' | 'subscription_bonus';
   note?: string;
   referralEventId?: number;
   createdAt: Date;
@@ -211,6 +211,38 @@ export class CreditService {
     }
 
     return await this.deductCredits(userId, cost, 'Export processing fee');
+  }
+
+  /**
+   * Grant monthly subscription credits
+   */
+  async grantSubscriptionCredits(userId: string, amount: number, planName: string): Promise<boolean> {
+    console.log(`💳 Granting ${amount} subscription credits to user ${userId} for plan ${planName}`);
+
+    const success = await this.addCredits(
+      userId,
+      amount,
+      'subscription_monthly',
+      `Monthly credits for ${planName} plan`
+    );
+
+    return success;
+  }
+
+  /**
+   * Grant bonus credits (for promotions, etc.)
+   */
+  async grantBonusCredits(userId: string, amount: number, note: string): Promise<boolean> {
+    console.log(`🎁 Granting ${amount} bonus credits to user ${userId}`);
+
+    const success = await this.addCredits(
+      userId,
+      amount,
+      'subscription_bonus',
+      note
+    );
+
+    return success;
   }
 }
 

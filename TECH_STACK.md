@@ -62,8 +62,8 @@
 - **Stripe**: ✅ Payment processing and subscription management
 - **Advanced Promo Code System**: ✅ Rate limiting, expiration logic, usage tracking with internal analytics
 - **Binary Choice Monetization**: ✅ Free vs premium content gating with dynamic UI updates
-- **Referral System**: 🟡 Database schema ready for referral tracking and credits (requires UI/business logic implementation)
-- **Discount Wallet**: 🟡 Infrastructure for user credit management (requires completion)
+- **Referral System**: ✅ Complete end-to-end implementation with credit awarding, redemption, and first export bonuses
+- **Credit Wallet**: ✅ Full payment integration with automatic credit application to Stripe checkout
 
 ## Real-time Features
 - **WebSockets (ws)**: Real-time progress tracking

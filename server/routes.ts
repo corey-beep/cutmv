@@ -41,6 +41,7 @@ import { AuthService } from './auth-service';
 import { supabaseService } from './supabase';
 import { requireAuth } from './auth-middleware';
 import { TimeEstimationService } from '../shared/time-estimation.js';
+import { creditService } from './services/credit-service.js';
 
 // Initialize auth service instance
 const authService = new AuthService();
@@ -730,15 +731,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🎬 Starting enhanced processing for video ${videoId}`);
 
       const { backgroundJobManager } = await import('./background-job-manager.js');
-      
+
       // Check if user already has an active job
       const userEmail = req.user?.email || 'unknown@user.com';
       const hasActiveJob = await backgroundJobManager.hasActiveJob(userEmail);
-      
+
       if (hasActiveJob) {
         return res.status(409).json({
           success: false,
           message: 'You have reached the maximum of 3 concurrent exports. Please wait for one to complete before starting a new export.',
+        });
+      }
+
+      // Check if user has enough credits (1 credit per export)
+      const userId = req.user!.id;
+      const currentCredits = await creditService.getUserCredits(userId);
+      const exportCost = 1; // 1 credit per export
+
+      if (currentCredits < exportCost) {
+        console.log(`❌ User ${userId} has insufficient credits: ${currentCredits} < ${exportCost}`);
+        return res.status(402).json({
+          success: false,
+          message: 'Insufficient credits. Please purchase credits or subscribe to continue.',
+          currentCredits,
+          requiredCredits: exportCost
         });
       }
       
@@ -768,14 +784,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: `Failed to create background job: ${jobResult.error}`,
         });
       }
-      
+
       console.log(`✅ Background job created: ${jobResult.jobId}`);
+
+      // Deduct credits for the export
+      const deductionSuccess = await creditService.deductCredits(
+        userId,
+        exportCost,
+        `Export processing for video ${videoId}`
+      );
+
+      if (!deductionSuccess) {
+        console.error(`❌ Failed to deduct credits for user ${userId} after job creation`);
+        // Job was already created, so we don't fail the request
+        // but we log this for manual review
+      }
+
+      // Get updated credit balance
+      const remainingCredits = await creditService.getUserCredits(userId);
 
       res.json({
         success: true,
         message: 'Processing started via background job manager',
         jobId: jobResult.jobId,
         sessionId,
+        creditsUsed: exportCost,
+        remainingCredits
       });
 
     } catch (error) {
@@ -917,6 +951,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           discountCode: promoCode 
         } = validatedBody;
 
+        // Get user's credit balance
+        const userCredits = await creditService.getUserCredits(req.user!.id);
+
         // Validate promo code if provided
         let discount = 0;
         if (promoCode) {
@@ -953,6 +990,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalAmount = Math.round(totalAmount * (1 - discount / 100));
         }
 
+        // Apply user credits as discount ($1 credit = $1.00 discount = 100 cents)
+        let creditsToApply = 0;
+        let creditDiscount = 0;
+        if (userCredits > 0 && totalAmount > 0) {
+          // Calculate how many credits we can use (1 credit = $1.00 = 100 cents)
+          const maxCreditsUsable = Math.floor(totalAmount / 100); // Can't use more credits than dollars in price
+          creditsToApply = Math.min(userCredits, maxCreditsUsable);
+          creditDiscount = creditsToApply * 100; // Convert credits to cents
+          totalAmount = Math.max(0, totalAmount - creditDiscount);
+
+          console.log(`💳 Applying ${creditsToApply} credits ($${creditsToApply}.00 discount) for user ${req.user!.email}`);
+        }
+
         if (!videoId) {
           return res.status(400).json({ error: 'Video ID is required' });
         }
@@ -963,14 +1013,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ error: 'Video not found' });
         }
 
-        // If total amount is $0.00 due to STAFF25 promo code, process as free
-        if (totalAmount === 0 && promoCode && promoCode.toUpperCase() === 'STAFF25') {
-          console.log(`🎫 Processing free with ${promoCode} promo code for user:`, req.user!.email);
+        // If total amount is $0.00 due to STAFF25 promo code OR credits, process as free
+        if (totalAmount === 0 && (promoCode?.toUpperCase() === 'STAFF25' || creditsToApply > 0)) {
+          const freeReason = promoCode?.toUpperCase() === 'STAFF25' ? `${promoCode} promo code` : `${creditsToApply} credits`;
+          console.log(`🎫 Processing free with ${freeReason} for user:`, req.user!.email);
           
           // Generate session ID for free processing
           const sessionId = crypto.randomUUID();
-          
+
           try {
+            // Deduct credits if used (not for STAFF25 promo)
+            if (creditsToApply > 0 && promoCode?.toUpperCase() !== 'STAFF25') {
+              const creditsDeducted = await creditService.deductCredits(
+                req.user!.id,
+                creditsToApply,
+                `Video processing - ${timestampCount} clips`
+              );
+
+              if (!creditsDeducted) {
+                return res.status(500).json({ error: 'Failed to deduct credits' });
+              }
+
+              console.log(`✅ Deducted ${creditsToApply} credits from user ${req.user!.email}`);
+            }
+
             // Start processing directly without payment
             const processingOptions = {
               generateCutdowns: aspectRatios.length > 0,
@@ -1045,6 +1111,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             timestampText,
             aspectRatios: JSON.stringify(aspectRatios),
             promoCode: promoCode || '',
+            creditsApplied: creditsToApply.toString(),
+            creditDiscount: creditDiscount.toString(),
           },
         });
 
@@ -1483,11 +1551,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as any;
-      const { videoId, userId, processingOptions, timestampText } = session.metadata;
-      
+      const { videoId, userId, processingOptions, timestampText, creditsApplied, creditDiscount } = session.metadata;
+
       try {
         const options = JSON.parse(processingOptions);
-        
+
+        // Deduct credits if they were applied to this payment
+        if (creditsApplied && parseInt(creditsApplied) > 0) {
+          const creditsUsed = parseInt(creditsApplied);
+          const deducted = await creditService.deductCredits(
+            userId,
+            creditsUsed,
+            `Video processing payment (Session: ${session.id.substring(0, 8)}...)`
+          );
+
+          if (deducted) {
+            console.log(`💳 Deducted ${creditsUsed} credits from user ${userId} for payment`);
+          } else {
+            console.error(`❌ Failed to deduct ${creditsUsed} credits from user ${userId}`);
+          }
+        }
+
         // Get video from storage
         const video = await storage.getVideo(parseInt(videoId));
         if (!video) {

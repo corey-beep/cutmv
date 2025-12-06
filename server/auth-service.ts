@@ -36,6 +36,11 @@ export class AuthService {
     return result;
   }
 
+  // Generate 6-digit verification code
+  private generateVerificationCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
   // Create or get user by email with Supabase integration
   async getOrCreateUser(email: string, referralCode?: string) {
     try {
@@ -86,15 +91,17 @@ export class AuthService {
   // Send magic link to user's email with referral support
   async sendMagicLink(email: string, callbackUrl: string = '/app', referralCode?: string) {
     try {
-      // Generate magic link token
+      // Generate magic link token and 6-digit verification code
       const token = this.generateToken();
       const hashedToken = this.hashToken(token);
+      const verificationCode = this.generateVerificationCode();
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour for better UX
 
       // Save magic link to database (store hashed token for security)
       await db.insert(magicLinks).values({
         email,
         token: hashedToken, // This should be the hashed version
+        verificationCode, // Store plaintext code (will be used once)
         expiresAt,
       });
 
@@ -118,9 +125,16 @@ export class AuthService {
         baseUrl = `https://${canonicalDomain}`;
         console.log('✅ Using canonical production domain:', baseUrl);
       } else {
-        // Development: use replit domains
-        baseUrl = replitDomains ? `https://${replitDomains.split(',')[0]}` : `https://${canonicalDomain}`;
-        console.log('✅ Using development domain:', baseUrl);
+        // Development: use replit domains or localhost
+        if (replitDomains) {
+          baseUrl = `https://${replitDomains.split(',')[0]}`;
+          console.log('✅ Using Replit development domain:', baseUrl);
+        } else {
+          // Local development - use localhost with PORT from env
+          const port = process.env.PORT || '3000';
+          baseUrl = `http://localhost:${port}`;
+          console.log('✅ Using local development domain:', baseUrl);
+        }
       }
       
       // SECURITY: Use encrypted auth token to avoid exposing email in URL
@@ -183,18 +197,26 @@ export class AuthService {
                 <!-- Content -->
                 <div style="padding: 40px 30px;">
                   <h2 style="margin: 0 0 20px 0; color: #333; font-size: 24px; font-weight: 600;">Login to Your Account</h2>
-                  
+
                   <p style="margin: 0 0 30px 0; color: #555; font-size: 16px; line-height: 1.6;">
-                    Click the button below to securely log into your CUTMV account. This link will expire in 1 hour.
+                    Click the button below to securely log into your CUTMV account, or use the 6-digit code. This link will expire in 1 hour.
                   </p>
-                  
+
                   <div style="text-align: center; margin: 40px 0;">
-                    <a href="${magicLinkUrl}" 
+                    <a href="${magicLinkUrl}"
                        style="background: #8cc63f; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; font-size: 18px; box-shadow: 0 4px 6px rgba(140, 198, 63, 0.3);">
                       Login to CUTMV →
                     </a>
                   </div>
-                  
+
+                  <div style="text-align: center; margin: 30px 0;">
+                    <p style="color: #666; font-size: 14px; margin: 0 0 10px 0;">Or enter this code:</p>
+                    <div style="background: #f8f8f8; border: 2px solid #8cc63f; border-radius: 8px; padding: 16px; display: inline-block;">
+                      <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #333; font-family: monospace;">${verificationCode}</span>
+                    </div>
+                    <p style="color: #999; font-size: 12px; margin: 10px 0 0 0;">Enter this code on the login page</p>
+                  </div>
+
                   <p style="color: #999; font-size: 14px; margin: 30px 0 0 0; text-align: center;">
                     If you didn't request this login link, you can safely ignore this email.
                   </p>
@@ -215,7 +237,9 @@ Login to CUTMV
 
 Click this link to log into your account: ${magicLinkUrl}
 
-This link will expire in 1 hour. If you didn't request this login link, you can safely ignore this email.
+Or enter this 6-digit code on the login page: ${verificationCode}
+
+This link and code will expire in 1 hour. If you didn't request this login link, you can safely ignore this email.
 
 © 2025 Full Digital LLC. All rights reserved.
         `,
@@ -316,6 +340,75 @@ This link will expire in 1 hour. If you didn't request this login link, you can 
       return { user, session };
     } catch (error) {
       console.error('❌ Error verifying magic link:', error);
+      throw error;
+    }
+  }
+
+  // Verify 6-digit code and create session
+  async verifyCode(email: string, code: string) {
+    try {
+      console.log('🔍 Verifying 6-digit code:', {
+        email,
+        code: code.substring(0, 3) + '...',
+        currentTime: new Date().toISOString()
+      });
+
+      // Find valid magic link with matching code
+      const [magicLink] = await db
+        .select()
+        .from(magicLinks)
+        .where(
+          and(
+            eq(magicLinks.email, email),
+            eq(magicLinks.verificationCode, code),
+            eq(magicLinks.used, false),
+            gt(magicLinks.expiresAt, new Date())
+          )
+        );
+
+      console.log('🔍 Code verification result:', {
+        found: !!magicLink,
+        email,
+        expired: magicLink ? magicLink.expiresAt < new Date() : 'N/A',
+        used: magicLink?.used
+      });
+
+      if (!magicLink) {
+        throw new Error('Invalid or expired verification code');
+      }
+
+      // Mark magic link as used
+      await db
+        .update(magicLinks)
+        .set({ used: true })
+        .where(eq(magicLinks.id, magicLink.id));
+
+      // Get or create user
+      const user = await this.getOrCreateUser(email);
+
+      // Update last login
+      await db
+        .update(users)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
+
+      // Create session
+      const sessionToken = this.generateToken();
+      const sessionExpiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+      const [session] = await db
+        .insert(sessions)
+        .values({
+          userId: user.id,
+          token: sessionToken,
+          expiresAt: sessionExpiresAt,
+        })
+        .returning();
+
+      console.log('✅ 6-digit code verified successfully for:', email);
+      return { user, session };
+    } catch (error) {
+      console.error('❌ Error verifying code:', error);
       throw error;
     }
   }

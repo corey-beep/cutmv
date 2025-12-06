@@ -4,6 +4,7 @@
 import { emailService } from './email-service.js';
 import { storage } from './storage.js';
 import { calculateJobDeadline } from './timeout-config.js';
+import { referralService } from './services/referral-service.js';
 // Note: accurateProgressTracker import removed - will use enhanced processor directly
 import type { BackgroundJob, InsertBackgroundJob, EmailDelivery, Video } from '../shared/schema.js';
 import fs from 'fs/promises';
@@ -563,6 +564,20 @@ class BackgroundJobManager {
         artistInfo: video.artistInfo || undefined,
         professionalQuality: true, // All exports are professional quality
       });
+
+      // Award first export bonus if this is user's first export
+      // This awards a bonus credit to the referrer when the referred user completes their first export
+      if (job.userId) {
+        try {
+          const bonusAwarded = await referralService.processFirstExport(job.userId, sessionId);
+          if (bonusAwarded) {
+            console.log(`🎁 First export bonus credited to referrer for user ${job.userId}`);
+          }
+        } catch (bonusError) {
+          console.error('Failed to process first export bonus:', bonusError);
+          // Don't fail the job if bonus fails
+        }
+      }
 
       // Remove from active jobs
       this.activeJobs.delete(sessionId);

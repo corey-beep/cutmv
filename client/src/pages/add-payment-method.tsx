@@ -17,11 +17,10 @@ import { AuthGuard } from '@/components/AuthGuard';
 import FaviconProvider from '@/components/FaviconProvider';
 import { Link, useLocation } from 'wouter';
 
-// Load Stripe
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
-}
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Load Stripe (only if key is provided)
+const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY
+  ? loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY)
+  : null;
 
 interface SetupFormProps {
   onSuccess: () => void;
@@ -132,6 +131,30 @@ export default function AddPaymentMethodPage() {
   const [clientSecret, setClientSecret] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [success, setSuccess] = useState(false);
+  const { toast } = useToast();
+
+  // Check if Stripe is configured
+  if (!stripePromise) {
+    return (
+      <AuthGuard>
+        <FaviconProvider
+          title="Add Payment Method - CUTMV | Full Digital"
+          description="Add a payment method to your CUTMV account for faster checkout when processing videos."
+        >
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardContent className="pt-6 text-center">
+                <p className="text-gray-600 mb-4">Payment processing is not currently configured.</p>
+                <Button onClick={() => setLocation('/app/profile')}>
+                  Return to Profile
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </FaviconProvider>
+      </AuthGuard>
+    );
+  }
 
   useEffect(() => {
     createSetupIntent();
@@ -170,8 +193,6 @@ export default function AddPaymentMethodPage() {
   const handleCancel = () => {
     setLocation('/app/profile?tab=billing');
   };
-
-  const { toast } = useToast();
 
   if (success) {
     return (

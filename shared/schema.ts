@@ -110,6 +110,7 @@ export const magicLinks = pgTable("magic_links", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
+  verificationCode: text("verification_code"), // 6-digit code for manual entry
   expiresAt: timestamp("expires_at").notNull(),
   used: boolean("used").default(false),
   createdAt: timestamp("created_at").defaultNow(),
