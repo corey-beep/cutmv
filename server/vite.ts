@@ -86,7 +86,8 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  app.use("*", (req, res) => {
+    console.log('📄 Serving index.html for:', req.originalUrl);
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
