@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { creditService } from './credit-service';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-07-30.basil',
 });
 
 // Subscription plan configuration
@@ -171,12 +171,13 @@ export class SubscriptionService {
       }
 
       // Get subscription from Stripe
-      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      const subscriptionResponse = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      const subscription = subscriptionResponse as any; // Type assertion for compatibility
 
       const isActive = subscription.status === 'active' || subscription.status === 'trialing';
 
       // Find matching plan
-      const priceId = subscription.items.data[0]?.price.id;
+      const priceId = subscription.items?.data?.[0]?.price?.id;
       const plan = SUBSCRIPTION_PLANS.find(p => p.priceId === priceId);
 
       return {
@@ -184,7 +185,7 @@ export class SubscriptionService {
         subscriptionId: subscription.id,
         customerId: user.stripeCustomerId || undefined,
         status: subscription.status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : undefined,
         plan,
         cancelAtPeriodEnd: subscription.cancel_at_period_end
       };

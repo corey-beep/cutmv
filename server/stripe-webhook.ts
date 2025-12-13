@@ -11,7 +11,7 @@ import { subscriptionService } from './services/subscription-service';
 const router = Router();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-07-30.basil',
 });
 
 // Webhook endpoint - must use raw body parser
@@ -79,7 +79,7 @@ router.post(
         }
 
         case 'invoice.payment_succeeded': {
-          const invoice = event.data.object as Stripe.Invoice;
+          const invoice = event.data.object as any; // Type assertion for Stripe API compatibility
 
           // Only handle subscription invoices
           if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {

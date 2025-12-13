@@ -8,7 +8,6 @@ import { Router } from 'express';
 import { authService } from './auth-service';
 import { insertUserSchema } from '@shared/schema';
 import { z } from 'zod';
-import { supabaseService } from './supabase';
 
 const router = Router();
 
@@ -277,24 +276,8 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ error: 'Invalid session' });
     }
 
-    // Get Supabase user data if available
-    let supabaseData = null;
-    if (supabaseService.isAvailable()) {
-      try {
-        const referralStats = await supabaseService.getUserReferralStats(auth.user.email);
-        const credits = await supabaseService.getUserCredits(auth.user.email);
-        supabaseData = {
-          credits,
-          referralStats
-        };
-      } catch (supabaseError) {
-        console.warn('⚠️ Failed to get Supabase user data:', supabaseError);
-      }
-    }
-
-    res.json({ 
-      user: auth.user,
-      supabase: supabaseData
+    res.json({
+      user: auth.user
     });
   } catch (error) {
     console.error('❌ Get user error:', error);
@@ -331,80 +314,12 @@ router.get('/dashboard', async (req, res) => {
       exports: []
     };
 
-    if (supabaseService.isAvailable()) {
-      try {
-        const [referralStats, credits] = await Promise.all([
-          supabaseService.getUserReferralStats(auth.user.email),
-          supabaseService.getUserCredits(auth.user.email)
-        ]);
-
-        dashboardData.credits = credits;
-        dashboardData.referralStats = referralStats;
-      } catch (supabaseError) {
-        console.warn('⚠️ Failed to get dashboard data:', supabaseError);
-      }
-    }
-
+    // Note: Credits and referral stats are now handled by dedicated services
+    // This endpoint returns basic dashboard structure
     res.json(dashboardData);
   } catch (error) {
     console.error('❌ Dashboard data error:', error);
     res.status(500).json({ error: 'Failed to get dashboard data' });
-  }
-});
-
-// Spend credits endpoint
-router.post('/spend-credits', async (req, res) => {
-  try {
-    const sessionToken = req.cookies['cutmv-session'];
-    const { amount, description } = req.body;
-    
-    if (!sessionToken) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-
-    const auth = await authService.verifySession(sessionToken);
-    
-    if (!auth) {
-      res.clearCookie('cutmv-session');
-      return res.status(401).json({ error: 'Invalid session' });
-    }
-
-    if (!supabaseService.isAvailable()) {
-      return res.status(503).json({ error: 'Credit system not available' });
-    }
-
-    // Check current balance
-    const currentBalance = await supabaseService.getUserCredits(auth.user.email);
-    if (currentBalance < amount) {
-      return res.status(400).json({ error: 'Insufficient credits' });
-    }
-
-    // Get user and spend credits
-    const supabaseUser = await supabaseService.getUserByEmail(auth.user.email);
-    if (!supabaseUser) {
-      return res.status(404).json({ error: 'User not found in credit system' });
-    }
-
-    const success = await supabaseService.addCredits(
-      supabaseUser.id, 
-      -amount, 
-      'spent', 
-      description || 'Export processing'
-    );
-
-    if (success) {
-      const newBalance = await supabaseService.getUserCredits(auth.user.email);
-      res.json({ 
-        success: true, 
-        creditsSpent: amount,
-        newBalance
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to spend credits' });
-    }
-  } catch (error) {
-    console.error('❌ Spend credits error:', error);
-    res.status(500).json({ error: 'Failed to spend credits' });
   }
 });
 

@@ -567,16 +567,17 @@ class BackgroundJobManager {
 
       // Award first export bonus if this is user's first export
       // This awards a bonus credit to the referrer when the referred user completes their first export
-      if (job.userId) {
-        try {
-          const bonusAwarded = await referralService.processFirstExport(job.userId, sessionId);
+      try {
+        const user = await storage.getUserByEmail(job.userEmail);
+        if (user) {
+          const bonusAwarded = await referralService.processFirstExport(user.id, sessionId);
           if (bonusAwarded) {
-            console.log(`🎁 First export bonus credited to referrer for user ${job.userId}`);
+            console.log(`🎁 First export bonus credited to referrer for user ${user.id}`);
           }
-        } catch (bonusError) {
-          console.error('Failed to process first export bonus:', bonusError);
-          // Don't fail the job if bonus fails
         }
+      } catch (bonusError) {
+        console.error('Failed to process first export bonus:', bonusError);
+        // Don't fail the job if bonus fails
       }
 
       // Remove from active jobs

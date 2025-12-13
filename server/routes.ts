@@ -19,7 +19,6 @@ import { insertVideoSchema, timestampListSchema, paymentRequestSchema, promoCode
 import crypto from "crypto";
 import { execSync } from "child_process";
 import R2Storage from "./r2-storage";
-import { queueManager, VideoProcessingJob, QueueProgressUpdate } from './cloudflare-queue.js';
 import { ffmpegProcessor } from './ffmpeg-progress.js';
 import { enhancedProcessor } from './enhanced-process.js';
 import { universalProgress } from './accurate-progress.js';
@@ -38,7 +37,6 @@ import { blogService } from './blog-service.js';
 import { promoCodeService } from './services/promoCodeService.js';
 import { urlSecurity } from './url-security.js';
 import { AuthService } from './auth-service';
-import { supabaseService } from './supabase';
 import { requireAuth } from './auth-middleware';
 import { TimeEstimationService } from '../shared/time-estimation.js';
 import { creditService } from './services/credit-service.js';

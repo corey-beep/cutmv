@@ -67,19 +67,17 @@
 ---
 
 ### Supabase Integration
-**Status:** ⚠️ **Usage Unclear** (requires audit)
-- Package installed: ✅ `@supabase/supabase-js`
-- Service file exists: ✅ `server/supabase.ts` (10KB)
-- Primary auth: Uses custom magic link system (not Supabase Auth)
-- Database: Uses PostgreSQL directly via Neon (not Supabase)
-- Usage in codebase: ❓ Unknown
+**Status:** ✅ **REMOVED** (December 12, 2025)
+- Package: ❌ Removed from package.json (~500KB saved)
+- Service file: ❌ Archived to `archive/unused-code-cleanup-dec-2025/`
+- Referral system: ✅ Now uses PostgreSQL via `server/services/referral-service.ts`
+- Credit system: ✅ Now uses PostgreSQL via `server/services/credit-service.ts`
 
-**Action Required:**
-1. Search codebase for Supabase client usage
-2. If used: Document what it's used for
-3. If unused: Remove package and service file (~500KB savings)
-
-**Estimated Effort:** 1-2 hours to audit
+**Outcome:**
+- Supabase was legacy/fallback code that was never deployed to production
+- All functionality migrated to custom PostgreSQL implementation
+- 9 npm packages removed (Supabase + dependencies)
+- See `CODE_CLEANUP_SUMMARY_DEC_2025.md` for full details
 
 ---
 
@@ -128,10 +126,10 @@ npx ts-unused-exports tsconfig.json
 ## 🎯 Recommended Next Steps
 
 ### Immediate (< 1 hour)
-1. ✅ ~~Delete backup files~~ **DONE**
-2. ✅ ~~Update documentation~~ **DONE**
-3. 🔲 Run TypeScript validation (`npm run check`)
-4. 🔲 Audit Supabase usage
+1. ✅ ~~Delete backup files~~ **DONE** (Dec 6, 2025)
+2. ✅ ~~Update documentation~~ **DONE** (Dec 6, 2025)
+3. ✅ ~~Run TypeScript validation~~ **DONE** (Dec 12, 2025 - 9 errors fixed)
+4. ✅ ~~Audit and remove Supabase~~ **DONE** (Dec 12, 2025 - ~500KB saved)
 
 ### Short-term (1-2 days)
 5. 🔲 Integrate enhanced FFmpeg progress tracking

@@ -9,7 +9,6 @@ import { db } from './db';
 import { users, sessions, magicLinks, exports } from '@shared/schema';
 import { eq, and, gt, lt } from 'drizzle-orm';
 import { Resend } from 'resend';
-import { supabaseService } from './supabase';
 import { urlSecurity } from './url-security.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -52,33 +51,11 @@ export class AuthService {
         const newReferralCode = this.generateReferralCode();
         
         // Create new user in PostgreSQL with auto-generated referral code
-        [user] = await db.insert(users).values({ 
-          email, 
+        [user] = await db.insert(users).values({
+          email,
           referralCode: newReferralCode,
           referredBy: referralCode // Track who referred this user
         }).returning();
-
-        // Also create user in Supabase if available
-        if (supabaseService.isAvailable()) {
-          try {
-            await supabaseService.createUser(email, referralCode);
-            console.log(`✅ Created user in Supabase: ${email}`);
-          } catch (supabaseError) {
-            console.warn('⚠️ Supabase user creation failed, continuing with PostgreSQL only:', supabaseError);
-          }
-        }
-      } else if (referralCode && supabaseService.isAvailable()) {
-        // Existing user but check if referral should be processed
-        try {
-          const supabaseUser = await supabaseService.getUserByEmail(email);
-          if (!supabaseUser) {
-            // User exists in PostgreSQL but not Supabase, create them
-            await supabaseService.createUser(email, referralCode);
-            console.log(`✅ Backfilled user in Supabase: ${email}`);
-          }
-        } catch (supabaseError) {
-          console.warn('⚠️ Supabase user check failed:', supabaseError);
-        }
       }
       
       return user;
