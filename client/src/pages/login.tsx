@@ -19,6 +19,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
   const { toast } = useToast();
   
   // Get error from URL params (no email pre-filling for security)
@@ -69,6 +71,50 @@ export default function LoginPage() {
     }
   };
 
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+
+    try {
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          code: verificationCode
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Login successful!",
+          description: "Redirecting to your dashboard...",
+        });
+        // Redirect to dashboard
+        window.location.href = '/app';
+      } else {
+        toast({
+          title: "Invalid code",
+          description: data.error || "The code you entered is invalid or expired.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
@@ -95,7 +141,7 @@ export default function LoginPage() {
               )}
 
               {emailSent ? (
-                <div className="text-center space-y-4">
+                <div className="text-center space-y-6">
                   <div className="w-16 h-16 mx-auto bg-brand-green/10 rounded-full flex items-center justify-center">
                     <Mail className="w-8 h-8 text-brand-green" />
                   </div>
@@ -104,17 +150,69 @@ export default function LoginPage() {
                       Check your email
                     </h3>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">
-                      We've sent a login link to <strong>{email}</strong>
+                      We've sent a login link and 6-digit code to <strong>{email}</strong>
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                      The link will expire in 15 minutes
+                      The code will expire in 15 minutes
                     </p>
                   </div>
-                  <Button 
-                    variant="outline" 
+
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">
+                        Or enter your code
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Code Entry Form */}
+                  <form onSubmit={handleVerifyCode} className="space-y-4">
+                    <div>
+                      <label htmlFor="code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        6-digit verification code
+                      </label>
+                      <Input
+                        id="code"
+                        type="text"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                        placeholder="123456"
+                        maxLength={6}
+                        className="w-full text-center text-2xl tracking-widest font-mono"
+                        disabled={isVerifying}
+                        autoComplete="one-time-code"
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full bg-brand-green hover:bg-brand-green-light text-brand-black font-semibold"
+                      disabled={isVerifying || verificationCode.length !== 6}
+                    >
+                      {isVerifying ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-brand-black border-t-transparent rounded-full animate-spin mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Verify code
+                        </>
+                      )}
+                    </Button>
+                  </form>
+
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setEmailSent(false);
                       setEmail('');
+                      setVerificationCode('');
                     }}
                     className="w-full"
                   >
@@ -163,7 +261,7 @@ export default function LoginPage() {
 
               <div className="text-center">
                 <p className="text-sm text-gray-500 dark:text-gray-500">
-                  No password needed. We'll send you a secure link to log in.
+                  No password needed. We'll send you a secure login link and 6-digit code.
                 </p>
               </div>
             </CardContent>
