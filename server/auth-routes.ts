@@ -49,12 +49,14 @@ router.post('/verify-code', async (req, res) => {
     // Verify the 6-digit code
     const { user, session } = await authService.verifyCode(validatedData.email, code);
 
-    // Set session cookie
-    res.cookie('session_token', session.token, {
+    // Set session cookie with matching name and settings as magic link verification
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT;
+
+    res.cookie('cutmv-session', session.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'lax',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (match magic link)
     });
 
     console.log('✅ 6-digit code verified and session created:', {
