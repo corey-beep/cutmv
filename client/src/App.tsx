@@ -29,6 +29,11 @@ import LegalPage from "@/pages/legal";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  // Debug: Log current path
+  if (typeof window !== 'undefined') {
+    console.log('🧭 Current path:', window.location.pathname);
+  }
+
   return (
     <>
       <ScrollToTop />
