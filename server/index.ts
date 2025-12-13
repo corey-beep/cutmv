@@ -43,10 +43,13 @@ app.use((req, res, next) => {
   // Enforce canonical domain in production
   if (isProduction && host) {
     const canonicalHost = 'cutmv.fulldigitalll.com';
-    
+
     // Redirect ALL non-canonical domains with 301 permanent redirect
     // Do not set cookies or render app on non-canonical domains
-    if (host !== canonicalHost && !host.includes('replit.dev') && !host.includes('localhost')) {
+    // EXCEPT: Railway healthcheck and internal domains
+    const isRailwayInternal = host.includes('railway.app') || host.includes('railway.internal');
+
+    if (host !== canonicalHost && !host.includes('replit.dev') && !host.includes('localhost') && !isRailwayInternal) {
       const redirectUrl = `https://${canonicalHost}${req.originalUrl}`;
       console.log(`🔄 Canonical redirect: ${host} → ${canonicalHost}`);
       // Ensure no cookies are set on non-canonical domains
