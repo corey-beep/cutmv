@@ -78,11 +78,11 @@ app.use((req, res, next) => {
   // Content Security Policy - Only load resources that are actually needed
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com https://replit.com *.sentry.io https://js.stripe.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com https://replit.com *.sentry.io https://js.stripe.com https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: http:",
     "font-src 'self' data:",
-    "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com wss: ws: *.sentry.io https://api.stripe.com",
+    "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com wss: ws: *.sentry.io https://api.stripe.com https://cloudflareinsights.com",
     "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
     "object-src 'none'",
     "base-uri 'self'"
