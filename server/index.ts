@@ -26,6 +26,11 @@ initializeSentry();
 
 const app = express();
 
+// Version identifier for Railway deployment verification
+console.log('🚀 CUTMV v3 - Build: 2025-12-13-01:05');
+console.log('📍 Environment:', process.env.NODE_ENV);
+console.log('🌐 Railway Deploy:', process.env.RAILWAY_ENVIRONMENT_NAME || 'Not Railway');
+
 // IMPORTANT: Stripe webhook MUST come before body parsers
 // It needs access to the raw request body
 app.use('/api/stripe', stripeWebhook);
