@@ -148,7 +148,7 @@ export const referralEvents = pgTable("referral_events", {
 export const creditTransactions = pgTable("credit_transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // 'earned', 'spent', 'expired'
+  transactionType: text("transaction_type").notNull(), // 'earned', 'spent', 'expired'
   amount: integer("amount").notNull(), // Credits gained or lost
   note: text("note"), // Description of transaction
   referralEventId: uuid("referral_event_id").references(() => referralEvents.id),
@@ -236,7 +236,7 @@ export const insertReferralEventSchema = createInsertSchema(referralEvents).pick
 
 export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).pick({
   userId: true,
-  type: true,
+  transactionType: true,
   amount: true,
   note: true,
   referralEventId: true,
