@@ -244,6 +244,12 @@ async function initializeServer() {
       });
     });
 
+    // DEBUG: Test route to verify Express is receiving requests
+    app.get('/test-route-12345', (req, res) => {
+      console.log('🧪 TEST ROUTE HIT');
+      res.send('TEST ROUTE WORKS - Express is receiving requests');
+    });
+
     // Setup static serving or Vite dev server (AFTER API route protection)
     if (process.env.NODE_ENV === 'production') {
       try {
