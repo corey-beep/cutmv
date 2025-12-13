@@ -95,8 +95,8 @@ export default function LoginPage() {
           title: "Login successful!",
           description: "Redirecting to your dashboard...",
         });
-        // Redirect to dashboard
-        window.location.href = '/app';
+        // Redirect to dashboard - using / for now until routing is fixed
+        window.location.href = '/';
       } else {
         toast({
           title: "Invalid code",
