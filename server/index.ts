@@ -31,6 +31,14 @@ console.log('🚀 CUTMV v3 - Build: 2025-12-13-01:05');
 console.log('📍 Environment:', process.env.NODE_ENV);
 console.log('🌐 Railway Deploy:', process.env.RAILWAY_ENVIRONMENT_NAME || 'Not Railway');
 
+// Request logger to debug routing issues
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) {
+    console.log('🌐 Non-API Request:', req.method, req.path);
+  }
+  next();
+});
+
 // IMPORTANT: Stripe webhook MUST come before body parsers
 // It needs access to the raw request body
 app.use('/api/stripe', stripeWebhook);
@@ -228,7 +236,8 @@ async function initializeServer() {
     // CRITICAL FIX: Add API route protection BEFORE static serving
     app.use('/api/*', (req, res, next) => {
       // If we get here, the API route wasn't found - return JSON error, not HTML
-      res.status(404).json({ 
+      console.log('🚫 API 404:', req.originalUrl);
+      res.status(404).json({
         error: 'API endpoint not found',
         endpoint: req.originalUrl,
         method: req.method
