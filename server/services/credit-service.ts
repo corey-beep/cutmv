@@ -12,7 +12,7 @@ export interface CreditTransaction {
   id: number;
   userId: string;
   amount: number;
-  transactionType: 'referral_signup' | 'first_export_bonus' | 'export_usage' | 'admin_grant' | 'expiration' | 'subscription_monthly' | 'subscription_bonus';
+  transactionType: 'referral_signup' | 'first_export_bonus' | 'export_usage' | 'admin_grant' | 'expiration' | 'subscription_monthly' | 'subscription_bonus' | 'credit_purchase' | 'video_processing';
   note?: string;
   referralEventId?: number;
   createdAt: Date;
@@ -243,6 +243,102 @@ export class CreditService {
     );
 
     return success;
+  }
+
+  /**
+   * Process credit purchase from Stripe
+   * $10 = 1000 credits conversion
+   */
+  async processCreditPurchase(userId: string, amountInCents: number, stripeSessionId: string): Promise<boolean> {
+    // Convert dollars to credits: $10 = 1000 credits, so $1 = 100 credits
+    const credits = Math.floor((amountInCents / 100) * 100);
+
+    console.log(`💳 Processing credit purchase: $${amountInCents / 100} = ${credits} credits for user ${userId}`);
+
+    const success = await this.addCredits(
+      userId,
+      credits,
+      'credit_purchase',
+      `Credit purchase - Stripe Session: ${stripeSessionId.substring(0, 12)}...`
+    );
+
+    return success;
+  }
+
+  /**
+   * Calculate credit cost for video processing options
+   */
+  calculateProcessingCost(options: {
+    timestampCount: number;
+    aspectRatios: string[];
+    generateGif: boolean;
+    generateThumbnails: boolean;
+    generateCanvas: boolean;
+    useFullPack?: boolean;
+  }): number {
+    let totalCredits = 0;
+
+    // Cutdowns: 99 credits per cutdown ($0.99 each)
+    if (options.timestampCount > 0 && options.aspectRatios.length > 0) {
+      const cutdownsCount = options.timestampCount * options.aspectRatios.length;
+      totalCredits += cutdownsCount * 99;
+    }
+
+    // Export options
+    if (options.useFullPack && (options.generateGif || options.generateThumbnails || options.generateCanvas)) {
+      totalCredits += 499; // Full pack: 499 credits ($4.99)
+    } else {
+      if (options.generateGif) {
+        totalCredits += 199; // GIF pack: 199 credits ($1.99)
+      }
+      if (options.generateThumbnails) {
+        totalCredits += 199; // Thumbnail pack: 199 credits ($1.99)
+      }
+      if (options.generateCanvas) {
+        totalCredits += 499; // Canvas: 499 credits ($4.99)
+      }
+    }
+
+    return totalCredits;
+  }
+
+  /**
+   * Process video processing payment with credits
+   */
+  async processVideoProcessing(
+    userId: string,
+    options: {
+      timestampCount: number;
+      aspectRatios: string[];
+      generateGif: boolean;
+      generateThumbnails: boolean;
+      generateCanvas: boolean;
+      useFullPack?: boolean;
+    },
+    videoId: number
+  ): Promise<{ success: boolean; cost: number; remainingCredits?: number }> {
+    const cost = this.calculateProcessingCost(options);
+
+    // Check if user has enough credits
+    const currentCredits = await this.getUserCredits(userId);
+    if (currentCredits < cost) {
+      console.log(`❌ User ${userId} has insufficient credits: ${currentCredits} < ${cost}`);
+      return { success: false, cost };
+    }
+
+    // Deduct credits
+    const success = await this.deductCredits(
+      userId,
+      cost,
+      `Video processing (ID: ${videoId})`
+    );
+
+    if (success) {
+      const remainingCredits = await this.getUserCredits(userId);
+      return { success: true, cost, remainingCredits };
+    }
+
+    return { success: false, cost };
   }
 }
 

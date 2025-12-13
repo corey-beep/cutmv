@@ -27,6 +27,8 @@ import FaviconProvider from '@/components/FaviconProvider';
 import DashboardLayout from '@/components/DashboardLayout';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, AuthGuard } from '@/components/AuthGuard';
+import { CreditBalance } from '@/components/referral/CreditBalance';
+import CreditPurchase from '@/components/CreditPurchase';
 
 // Dashboard data types
 interface DashboardUpload {
@@ -341,8 +343,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Quick Stats and Credits */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Exports</CardTitle>
@@ -352,7 +354,7 @@ export default function DashboardPage() {
                   <div className="text-2xl font-bold">{exports.length}</div>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Active Files</CardTitle>
@@ -364,6 +366,13 @@ export default function DashboardPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              <CreditBalance />
+            </div>
+
+            {/* Credit Purchase Section */}
+            <div className="mb-8">
+              <CreditPurchase onPurchaseComplete={fetchDashboardData} />
             </div>
 
             {/* Tabs for Uploads and Exports */}

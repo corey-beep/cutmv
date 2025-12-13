@@ -7,8 +7,12 @@
 import { Router } from 'express';
 import { creditService } from './services/credit-service';
 import { requireAuth } from './auth-middleware';
+import Stripe from 'stripe';
 
 const router = Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2024-12-18.acacia',
+});
 
 /**
  * Get user's current credit balance
@@ -117,10 +121,10 @@ router.post('/pay-for-export', requireAuth, async (req, res) => {
 router.post('/first-export-bonus', requireAuth, async (req, res) => {
   try {
     const success = await creditService.processFirstExportBonus(req.user!.id);
-    
+
     if (success) {
       const currentCredits = await creditService.getUserCredits(req.user!.id);
-      
+
       res.json({
         success: true,
         message: 'First export bonus granted!',
@@ -138,6 +142,113 @@ router.post('/first-export-bonus', requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to process first export bonus'
+    });
+  }
+});
+
+/**
+ * Calculate credit cost for processing options
+ */
+router.post('/calculate-cost', requireAuth, async (req, res) => {
+  try {
+    const { timestampText, aspectRatios = [], generateGif = false, generateThumbnails = false, generateCanvas = false, useFullPack = false } = req.body;
+
+    // Count timestamps
+    const timestampCount = timestampText
+      ? timestampText.split('\n').filter((line: string) => line.trim() && line.match(/\d+:\d+\s*-\s*\d+:\d+/)).length
+      : 0;
+
+    const cost = creditService.calculateProcessingCost({
+      timestampCount,
+      aspectRatios,
+      generateGif,
+      generateThumbnails,
+      generateCanvas,
+      useFullPack
+    });
+
+    const currentCredits = await creditService.getUserCredits(req.user!.id);
+    const canAfford = currentCredits >= cost;
+
+    res.json({
+      success: true,
+      cost,
+      currentCredits,
+      canAfford,
+      shortfall: canAfford ? 0 : cost - currentCredits,
+      breakdown: {
+        cutdowns: timestampCount > 0 && aspectRatios.length > 0 ? timestampCount * aspectRatios.length * 99 : 0,
+        gifPack: generateGif && !useFullPack ? 199 : 0,
+        thumbnailPack: generateThumbnails && !useFullPack ? 199 : 0,
+        canvas: generateCanvas && !useFullPack ? 499 : 0,
+        fullPack: useFullPack && (generateGif || generateThumbnails || generateCanvas) ? 499 : 0
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating credit cost:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to calculate credit cost'
+    });
+  }
+});
+
+/**
+ * Create Stripe checkout session for credit purchase
+ */
+router.post('/purchase', requireAuth, async (req, res) => {
+  try {
+    const { amount } = req.body; // Amount in dollars (e.g., 10, 25, 50, 100)
+
+    if (!amount || amount < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum purchase amount is $10'
+      });
+    }
+
+    // Calculate credits: $10 = 1000 credits
+    const credits = amount * 100;
+
+    // Create Stripe checkout session for credit purchase
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${credits} CUTMV Credits`,
+            description: `Credit package: $${amount} = ${credits} credits ($10 = 1000 credits)`,
+          },
+          unit_amount: amount * 100, // Convert to cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${req.headers.origin}/dashboard?purchase=success&credits=${credits}`,
+      cancel_url: `${req.headers.origin}/dashboard?purchase=cancelled`,
+      customer_email: req.user!.email,
+      metadata: {
+        type: 'credit_purchase',
+        userId: req.user!.id,
+        credits: credits.toString(),
+        amountDollars: amount.toString()
+      }
+    });
+
+    console.log(`💳 Credit purchase checkout created: ${credits} credits for user ${req.user!.id}`);
+
+    res.json({
+      success: true,
+      sessionId: session.id,
+      checkoutUrl: session.url,
+      credits
+    });
+  } catch (error) {
+    console.error('Error creating credit purchase checkout:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create checkout session'
     });
   }
 });

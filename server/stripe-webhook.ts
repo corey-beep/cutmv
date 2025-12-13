@@ -7,6 +7,7 @@
 import { Router, raw } from 'express';
 import Stripe from 'stripe';
 import { subscriptionService } from './services/subscription-service';
+import { creditService } from './services/credit-service';
 
 const router = Router();
 
@@ -56,8 +57,30 @@ router.post(
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
 
-          // Only handle subscription checkouts
-          if (session.mode === 'subscription' && session.subscription) {
+          // Handle credit purchases
+          if (session.metadata?.type === 'credit_purchase') {
+            console.log(`💳 Credit purchase completed: ${session.id}`);
+
+            const userId = session.metadata.userId;
+            const credits = parseInt(session.metadata.credits || '0');
+            const amountInCents = session.amount_total || 0;
+
+            if (userId && credits > 0) {
+              const success = await creditService.processCreditPurchase(
+                userId,
+                amountInCents,
+                session.id
+              );
+
+              if (success) {
+                console.log(`✅ Added ${credits} credits to user ${userId}`);
+              } else {
+                console.error(`❌ Failed to add credits to user ${userId}`);
+              }
+            }
+          }
+          // Handle subscription checkouts
+          else if (session.mode === 'subscription' && session.subscription) {
             console.log(`✅ Checkout completed for subscription: ${session.subscription}`);
 
             // The subscription.created event will handle credit allocation

@@ -988,19 +988,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalAmount = Math.round(totalAmount * (1 - discount / 100));
         }
 
-        // Apply user credits as discount ($1 credit = $1.00 discount = 100 cents)
-        let creditsToApply = 0;
-        let creditDiscount = 0;
-        if (userCredits > 0 && totalAmount > 0) {
-          // Calculate how many credits we can use (1 credit = $1.00 = 100 cents)
-          const maxCreditsUsable = Math.floor(totalAmount / 100); // Can't use more credits than dollars in price
-          creditsToApply = Math.min(userCredits, maxCreditsUsable);
-          creditDiscount = creditsToApply * 100; // Convert credits to cents
-          totalAmount = Math.max(0, totalAmount - creditDiscount);
-
-          console.log(`💳 Applying ${creditsToApply} credits ($${creditsToApply}.00 discount) for user ${req.user!.email}`);
-        }
-
         if (!videoId) {
           return res.status(400).json({ error: 'Video ID is required' });
         }
@@ -1011,28 +998,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ error: 'Video not found' });
         }
 
-        // If total amount is $0.00 due to STAFF25 promo code OR credits, process as free
-        if (totalAmount === 0 && (promoCode?.toUpperCase() === 'STAFF25' || creditsToApply > 0)) {
-          const freeReason = promoCode?.toUpperCase() === 'STAFF25' ? `${promoCode} promo code` : `${creditsToApply} credits`;
-          console.log(`🎫 Processing free with ${freeReason} for user:`, req.user!.email);
+        // NEW CREDIT SYSTEM: Process with credits (1 credit = 1 cent worth of features)
+        // totalAmount is already in "cents" which equals credits (99 cents = 99 credits)
+        const creditsRequired = totalAmount;
+        const hasEnoughCredits = userCredits >= creditsRequired;
+
+        console.log(`💳 Credit-based processing for user ${req.user!.email}: has ${userCredits} credits, needs ${creditsRequired} credits`);
+
+        // Process with credits if user has enough (or free with STAFF25 promo)
+        if (hasEnoughCredits || promoCode?.toUpperCase() === 'STAFF25') {
+          const freeReason = promoCode?.toUpperCase() === 'STAFF25' ? `${promoCode} promo code` : `${creditsRequired} credits`;
+          console.log(`🎫 Processing with ${freeReason} for user:`, req.user!.email);
           
           // Generate session ID for free processing
           const sessionId = crypto.randomUUID();
 
           try {
-            // Deduct credits if used (not for STAFF25 promo)
-            if (creditsToApply > 0 && promoCode?.toUpperCase() !== 'STAFF25') {
+            // Deduct credits (not for STAFF25 promo which is 100% free)
+            if (creditsRequired > 0 && promoCode?.toUpperCase() !== 'STAFF25') {
               const creditsDeducted = await creditService.deductCredits(
                 req.user!.id,
-                creditsToApply,
-                `Video processing - ${timestampCount} clips`
+                creditsRequired,
+                `Video processing - ${timestampCount} clips (Video ID: ${videoId})`
               );
 
               if (!creditsDeducted) {
-                return res.status(500).json({ error: 'Failed to deduct credits' });
+                return res.status(400).json({
+                  error: 'Insufficient credits',
+                  required: creditsRequired,
+                  available: userCredits
+                });
               }
 
-              console.log(`✅ Deducted ${creditsToApply} credits from user ${req.user!.email}`);
+              console.log(`✅ Deducted ${creditsRequired} credits from user ${req.user!.email}`);
             }
 
             // Start processing directly without payment
@@ -1063,19 +1061,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return res.status(500).json({ error: 'Failed to start processing' });
             }
 
-            return res.json({ 
-              freeWithPromo: true, 
+            return res.json({
+              success: true,
+              creditBased: true,
               sessionId,
-              promoMessage: `Free processing started with ${promoCode}!`
+              creditsUsed: creditsRequired,
+              message: promoCode?.toUpperCase() === 'STAFF25' ? `Free processing started with ${promoCode}!` : `Processing started using ${creditsRequired} credits`
             });
 
           } catch (processingError) {
-            console.error('Free processing error:', processingError);
-            return res.status(500).json({ error: 'Failed to start free processing' });
+            console.error('Credit-based processing error:', processingError);
+            return res.status(500).json({ error: 'Failed to start processing' });
           }
         }
 
-        // Create Stripe checkout session for paid processing
+        // User doesn't have enough credits - return error asking them to purchase more
+        console.log(`❌ Insufficient credits: user has ${userCredits}, needs ${creditsRequired}`);
+        return res.status(402).json({
+          error: 'Insufficient credits',
+          required: creditsRequired,
+          available: userCredits,
+          shortfall: creditsRequired - userCredits,
+          message: `You need ${creditsRequired} credits but only have ${userCredits}. Please purchase ${creditsRequired - userCredits} more credits to continue.`
+        });
+
+        // OLD CODE: Create Stripe checkout session for paid processing (NO LONGER USED)
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ['card'],
           line_items: [{

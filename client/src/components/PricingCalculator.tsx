@@ -444,20 +444,35 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
   const processPayment = async () => {
     setIsCreatingCheckout(true);
     try {
-      console.log('💳 Processing payment/promo with total:', totalAmount, 'discount:', discountApplied, 'code:', discountCode);
-      
-      // Always call create-payment-session - it handles both paid and free processing
+      console.log('💳 Processing with credits/promo, total:', totalAmount, 'discount:', discountApplied, 'code:', discountCode);
+
+      // Call create-payment-session - it handles credit-based processing
       const response = await apiRequest("POST", "/api/create-payment-session", {
         ...config,
         discountCode,
         videoId: uploadedVideo?.id
       });
+
+      // Handle insufficient credits error (402 Payment Required)
+      if (response.status === 402) {
+        const data = await response.json();
+        toast({
+          title: "Insufficient Credits",
+          description: data.message || `You need ${data.required} credits but only have ${data.available}. Please purchase more credits from your dashboard.`,
+          variant: "destructive",
+          duration: 8000,
+        });
+        // Optionally redirect to dashboard to purchase credits
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 2000);
+        return;
+      }
+
       const data = await response.json();
-      
-      // Welcome email handling removed since email opt-in is now handled at account creation
-      
-      // Handle free processing with promo code
-      if (data.freeWithPromo) {
+
+      // Handle credit-based processing success
+      if (data.creditBased || data.freeWithPromo) {
         try {
           logPaymentEvent('free_session_created', 0, data.sessionId);
           logUserEvent('promo_code_success', { code: discountCode, sessionId: data.sessionId });
@@ -475,8 +490,8 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
         }
         
         toast({
-          title: "Promo Code Applied!",
-          description: data.promoMessage || "Processing started for free!",
+          title: data.creditBased ? "Processing Started!" : "Promo Code Applied!",
+          description: data.message || (data.creditBased ? `Using ${data.creditsUsed} credits` : "Processing started for free!"),
           variant: "default",
         });
         
@@ -692,6 +707,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
   };
 
   const formatPrice = (cents: number) => (cents / 100).toFixed(2);
+  const formatCredits = (cents: number) => cents; // Credits are 1:1 with cents ($0.99 = 99 credits)
 
   if (!pricing) {
     return (
@@ -769,9 +785,9 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                               Your {currentVideo.duration} video will generate fewer exports due to its short length:
                             </p>
                             <ul className="text-sm text-amber-700 space-y-1 ml-4">
-                              <li>• <strong>5 GIFs</strong> instead of 10 (same $1.99 price)</li>
-                              <li>• <strong>5 thumbnails</strong> instead of 10 (same $1.99 price)</li>
-                              <li>• <strong>2 Canvas loops</strong> instead of 5 (same $4.99 price)</li>
+                              <li>• <strong>5 GIFs</strong> instead of 10 (same 199 credits)</li>
+                              <li>• <strong>5 thumbnails</strong> instead of 10 (same 199 credits)</li>
+                              <li>• <strong>2 Canvas loops</strong> instead of 5 (same 499 credits)</li>
                             </ul>
                             <p className="text-sm text-amber-700 font-medium">
                               For maximum value, consider uploading a video longer than 40 seconds to receive the full quantity of exports.
@@ -801,12 +817,12 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                         <HelpCircle className="w-4 h-4 text-gray-400" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>AI processes each timestamp into one clip. You'll be charged $0.99 per timestamp, per format (vertical and/or horizontal). Selecting both formats = 2x.</p>
+                        <p>AI processes each timestamp into one clip. You'll be charged 99 credits per timestamp, per format (vertical and/or horizontal). Selecting both formats = 2x.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
                   <p className="text-sm text-gray-500">
-                    AI cuts sections from your video – $0.99 per timestamp per format
+                    AI cuts sections from your video – 99 credits per timestamp per format
                   </p>
                 </div>
               </div>
@@ -901,7 +917,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                                   Suggested
                                 </Badge>
                               )}
-                              <Badge variant="secondary">${formatPrice(pricing.cutdown16x9)} per clip</Badge>
+                              <Badge variant="secondary">{formatCredits(pricing.cutdown16x9)} credits per clip</Badge>
                             </div>
                           </div>
                         </label>
@@ -931,7 +947,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                                   Suggested
                                 </Badge>
                               )}
-                              <Badge variant="secondary">${formatPrice(pricing.cutdown9x16)} per clip</Badge>
+                              <Badge variant="secondary">{formatCredits(pricing.cutdown9x16)} credits per clip</Badge>
                             </div>
                           </div>
                         </label>
@@ -983,7 +999,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                                 const [minutes, seconds] = currentVideo.duration.split(':').map(Number);
                                 const totalSeconds = minutes * 60 + seconds;
                                 return totalSeconds < 40 ? 'pack of 5' : 'pack of 10';
-                              })()} high-quality thumbnail images intelligently spaced throughout your video. Price: ${formatPrice(pricing.thumbnailPack)}
+                              })()} high-quality thumbnail images intelligently spaced throughout your video. Price: {formatCredits(pricing.thumbnailPack)} credits
                             </p>
                           </TooltipContent>
                         </Tooltip>
@@ -994,7 +1010,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                           const totalSeconds = minutes * 60 + seconds;
                           return totalSeconds < 40 ? 'Pack of 5 thumbnails' : 'Pack of 10 thumbnails';
                         })()}
-                        {` - ${formatPrice(pricing.thumbnailPack)}`}
+                        {` - ${formatCredits(pricing.thumbnailPack)} credits`}
                       </p>
                       <p className="text-xs text-gray-400 italic mt-1">
                         Professional quality with no watermarks
@@ -1029,7 +1045,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                                 const [minutes, seconds] = currentVideo.duration.split(':').map(Number);
                                 const totalSeconds = minutes * 60 + seconds;
                                 return totalSeconds < 40 ? 'pack of 5' : 'pack of 10';
-                              })()} smart 6-second GIF clips from your video. Price: ${formatPrice(pricing.gifPack)}
+                              })()} smart 6-second GIF clips from your video. Price: {formatCredits(pricing.gifPack)} credits
                             </p>
                           </TooltipContent>
                         </Tooltip>
@@ -1040,7 +1056,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                           const totalSeconds = minutes * 60 + seconds;
                           return totalSeconds < 40 ? 'Pack of 5 × 6-second GIFs' : 'Pack of 10 × 6-second GIFs';
                         })()}
-                        {` - ${formatPrice(pricing.gifPack)}`}
+                        {` - ${formatCredits(pricing.gifPack)} credits`}
                       </p>
                       <p className="text-xs text-gray-400 italic mt-1">
                         Professional quality with no watermarks
@@ -1078,7 +1094,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                                   const [minutes, seconds] = currentVideo.duration.split(':').map(Number);
                                   const totalSeconds = minutes * 60 + seconds;
                                   return totalSeconds < 40 ? 'pack of 2' : 'pack of 5';
-                                })()} vertical 1080x1920 8-second loops optimized for Spotify Canvas. Price: ${formatPrice(pricing.spotifyCanvas)}
+                                })()} vertical 1080x1920 8-second loops optimized for Spotify Canvas. Price: {formatCredits(pricing.spotifyCanvas)} credits
                               </p>
                               <a 
                                 href="https://artists.spotify.com/canvas" 
@@ -1098,7 +1114,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                           const totalSeconds = minutes * 60 + seconds;
                           return totalSeconds < 40 ? 'Pack of 2 × 8-second Canvas' : 'Pack of 5 × 8-second Canvas';
                         })()}
-                        {` - ${formatPrice(pricing.spotifyCanvas)}`}
+                        {` - ${formatCredits(pricing.spotifyCanvas)} credits`}
                       </p>
                       <p className="text-xs text-gray-400 italic mt-1">
                         Professional quality exports ready for commercial use
@@ -1142,7 +1158,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                               <HelpCircle className="w-4 h-4 text-green-600" />
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>AI automatically generates all export types (GIFs, Thumbnails, and Canvas) for one low price. Save money with this intelligent bundle: ${formatPrice(pricing.fullFeaturePack)}</p>
+                              <p>AI automatically generates all export types (GIFs, Thumbnails, and Canvas) for one low price. Save credits with this intelligent bundle: {formatCredits(pricing.fullFeaturePack)} credits</p>
                             </TooltipContent>
                           </Tooltip>
                         </div>
@@ -1383,10 +1399,10 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
               size="lg"
             >
               <CreditCard className="w-4 h-4 mr-2" />
-              {isCreatingCheckout ? "Creating Session..." : 
+              {isCreatingCheckout ? "Creating Session..." :
                totalAmount === 0 && discountApplied > 0 ? "Start Free Generation" :
                totalAmount === 0 ? "Select Features to Continue" :
-               `Pay $${formatPrice(totalAmount)} (Opens in New Tab)`}
+               `Process with ${formatCredits(totalAmount)} Credits`}
             </Button>
           )}
 
@@ -1478,7 +1494,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
           <DialogHeader>
             <DialogTitle className="text-center">🎯 Don't forget to bundle and save!</DialogTitle>
             <DialogDescription className="text-center">
-              Hey! You can get all add-ons (GIFs, Thumbnails, and Spotify Canvas) for just $4.99 instead of paying separately. You're saving up to 50%!
+              Hey! You can get all add-ons (GIFs, Thumbnails, and Spotify Canvas) for just 499 credits instead of paying separately. You're saving up to 50%!
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col space-y-3">
