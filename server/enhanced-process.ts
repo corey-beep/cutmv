@@ -19,6 +19,19 @@ function parseVideoDuration(duration: string): number {
   }
   return 60; // Default 1 minute if parsing fails
 }
+
+// Helper function to generate clean filename from video metadata
+function generateCleanFilename(videoData: any): string {
+  // Priority: videoTitle with artistInfo > videoTitle > originalName without extension
+  if (videoData.videoTitle && videoData.artistInfo) {
+    return `${videoData.artistInfo} - ${videoData.videoTitle}`;
+  }
+  if (videoData.videoTitle) {
+    return videoData.videoTitle;
+  }
+  // Fallback to original filename without extension
+  return videoData.originalName?.replace(/\.[^/.]+$/, '') || 'Video';
+}
 import AdmZip from 'adm-zip';
 import path from 'path';
 import fs from 'fs/promises';
@@ -227,9 +240,13 @@ class EnhancedProcessor {
   // Create processing operations from options
   private async createProcessingOperations(videoData: any, options: any): Promise<ProcessingOperation[]> {
     const operations: ProcessingOperation[] = [];
+
+    // Generate clean filename from video metadata
+    const cleanName = generateCleanFilename(videoData);
+
     // All files will be created in memory and uploaded directly to R2
     const baseOutputDir = `/tmp/processing/${videoData.originalName.replace(/\.[^/.]+$/, '')}`;
-    
+
     console.log(`🔧 DEBUG - Enhanced processor options:`, {
       hasGenerateCutdowns: !!options.generateCutdowns,
       generateCutdowns: options.generateCutdowns,
@@ -237,17 +254,17 @@ class EnhancedProcessor {
       timestampText: options.timestampText?.substring(0, 50),
       allOptions: Object.keys(options)
     });
-    
+
     // Parse timestamps for cutdowns
     if (options.generateCutdowns && options.timestampText) {
       const timestamps = this.parseTimestamps(options.timestampText);
-      
+
       for (let i = 0; i < timestamps.length; i++) {
         const timestamp = timestamps[i];
-        
+
         for (const aspectRatio of options.aspectRatios || ['16:9']) {
           const aspectSuffix = aspectRatio === '9:16' ? '(9x16)' : '(16x9)';
-          const outputPath = path.join(baseOutputDir, `clips ${aspectSuffix}`, `${videoData.originalName}-clip-${String(i + 1).padStart(2, '0')}.mp4`);
+          const outputPath = path.join(baseOutputDir, `clips ${aspectSuffix}`, `${cleanName}-clip-${String(i + 1).padStart(2, '0')}.mp4`);
           
           console.log(`🎬 DEBUG: Creating cutdown with aspect ratio: ${aspectRatio}, suffix: ${aspectSuffix}`);
           
@@ -278,15 +295,15 @@ class EnhancedProcessor {
       console.log(`🎨 DEBUG - GIF generation requested`);
       const videoDuration = parseFloat(videoData.duration?.replace(/[^\d.]/g, '') || '0');
       const gifCount = videoDuration < 40 ? 5 : 10;
-      
+
       console.log(`🎨 DEBUG - Video duration: ${videoDuration}s, will generate ${gifCount} GIFs`);
-      
+
       for (let i = 0; i < gifCount; i++) {
         operations.push({
           type: 'gif',
           id: `gif_${i}`,
           inputPath: videoData.r2Url || videoData.path, // Use R2 URL for processing
-          outputPath: path.join(baseOutputDir, 'gifs', `${videoData.originalName}-gif-${String(i + 1).padStart(2, '0')}.gif`),
+          outputPath: path.join(baseOutputDir, 'gifs', `${cleanName}-gif-${String(i + 1).padStart(2, '0')}.gif`),
           options: { index: i, count: gifCount, duration: 6 },
           duration: 6,
           status: 'pending',
@@ -300,13 +317,13 @@ class EnhancedProcessor {
     if (options.generateThumbnails) {
       const videoDuration = parseFloat(videoData.duration?.replace(/[^\d.]/g, '') || '0');
       const thumbnailCount = videoDuration < 40 ? 5 : 10;
-      
+
       for (let i = 0; i < thumbnailCount; i++) {
         operations.push({
           type: 'thumbnail',
           id: `thumbnail_${i}`,
           inputPath: videoData.r2Url || videoData.path, // Use R2 URL for processing
-          outputPath: path.join(baseOutputDir, 'thumbnails', `${videoData.originalName}-thumbnail-${String(i + 1).padStart(2, '0')}.jpg`),
+          outputPath: path.join(baseOutputDir, 'thumbnails', `${cleanName}-thumbnail-${String(i + 1).padStart(2, '0')}.jpg`),
           options: { index: i, count: thumbnailCount, videoDuration: videoDuration }, // PERFORMANCE: Pass duration to avoid R2 ffprobe
           duration: 1, // Thumbnail extraction is fast
           status: 'pending',
@@ -319,13 +336,13 @@ class EnhancedProcessor {
     if (options.generateCanvas) {
       const videoDuration = parseFloat(videoData.duration?.replace(/[^\d.]/g, '') || '0');
       const canvasCount = videoDuration < 40 ? 2 : 5;
-      
+
       for (let i = 0; i < canvasCount; i++) {
         operations.push({
           type: 'canvas',
           id: `canvas_${i}`,
           inputPath: videoData.r2Url || videoData.path, // Use R2 URL for processing
-          outputPath: path.join(baseOutputDir, 'canvas', `${videoData.originalName}-canvas-${String(i + 1).padStart(2, '0')}.mp4`),
+          outputPath: path.join(baseOutputDir, 'canvas', `${cleanName}-canvas-${String(i + 1).padStart(2, '0')}.mp4`),
           options: { index: i, count: canvasCount, duration: 8 },
           duration: 8,
           status: 'pending',
@@ -599,7 +616,11 @@ class EnhancedProcessor {
   private async createResultsZip(job: AccurateProcessingJob): Promise<string> {
     const zip = new AdmZip();
     const completedOps = job.operations.filter(op => op.status === 'completed');
-    
+
+    // Get video metadata for folder naming
+    const video = await storage.getVideo(job.videoId);
+    const cleanName = video ? generateCleanFilename(video) : `video_${job.videoId}`;
+
     for (const operation of completedOps) {
       try {
         const stats = await fs.stat(operation.outputPath);
@@ -607,9 +628,22 @@ class EnhancedProcessor {
           // Read file and add to ZIP in memory (temporary files will be cleaned up)
           const fileBuffer = await fs.readFile(operation.outputPath);
           const filename = path.basename(operation.outputPath);
-          const folderName = operation.type === 'cutdown' ? 
-            (operation.options.aspectRatio === '9:16' ? 'clips (9x16)' : 'clips (16x9)') : 
-            operation.type;
+
+          // Use video metadata in folder names
+          let folderName: string;
+          if (operation.type === 'cutdown') {
+            const aspectSuffix = operation.options.aspectRatio === '9:16' ? '9x16' : '16x9';
+            folderName = `${cleanName} - Clips (${aspectSuffix})`;
+          } else if (operation.type === 'gif') {
+            folderName = `${cleanName} - GIFs`;
+          } else if (operation.type === 'thumbnail') {
+            folderName = `${cleanName} - Thumbnails`;
+          } else if (operation.type === 'canvas') {
+            folderName = `${cleanName} - Canvas Loops`;
+          } else {
+            folderName = operation.type;
+          }
+
           zip.addFile(`${folderName}/${filename}`, fileBuffer);
         }
       } catch (error) {
@@ -619,8 +653,10 @@ class EnhancedProcessor {
     
     // Create ZIP in memory first, then upload directly to R2
     const zipBuffer = zip.toBuffer();
-    const zipFilename = `video_${job.videoId}_exports.zip`;
-    
+
+    // Reuse video and cleanName variables from folder naming above
+    const zipFilename = `${cleanName} - Exports.zip`;
+
     // Generate R2 key with user association for proper organization
     const userEmail = job.userEmail || 'unknown';
     const { R2Storage } = await import('./r2-storage.js');
