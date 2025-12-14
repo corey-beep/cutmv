@@ -439,8 +439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Finalize upload endpoint (alias for upload-complete for client compatibility)
   app.post('/api/finalize-upload', requireAuth, async (req, res) => {
     try {
-      const { uploadId } = req.body;
-      
+      const { uploadId, videoTitle, artistInfo } = req.body;
+
       if (!uploadId) {
         return res.status(400).json({ error: 'Upload ID required' });
       }
@@ -448,6 +448,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const upload = chunkStore.get(uploadId);
       if (!upload || !upload.completed) {
         return res.status(400).json({ error: 'Upload not found or incomplete' });
+      }
+
+      // Update metadata from finalize request (takes precedence over chunk metadata)
+      if (videoTitle !== undefined) {
+        upload.videoTitle = videoTitle;
+      }
+      if (artistInfo !== undefined) {
+        upload.artistInfo = artistInfo;
       }
 
       // **R2-ONLY ASSEMBLY** - Assemble chunks in memory and upload directly to R2 - NO LOCAL FILES
