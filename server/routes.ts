@@ -441,6 +441,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { uploadId, videoTitle, artistInfo } = req.body;
 
+      console.log('📝 Finalize-upload received:', { uploadId, videoTitle, artistInfo });
+
       if (!uploadId) {
         return res.status(400).json({ error: 'Upload ID required' });
       }
@@ -453,9 +455,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update metadata from finalize request (takes precedence over chunk metadata)
       if (videoTitle !== undefined) {
         upload.videoTitle = videoTitle;
+        console.log(`✅ Set upload.videoTitle to: ${videoTitle}`);
       }
       if (artistInfo !== undefined) {
         upload.artistInfo = artistInfo;
+        console.log(`✅ Set upload.artistInfo to: ${artistInfo}`);
       }
 
       // **R2-ONLY ASSEMBLY** - Assemble chunks in memory and upload directly to R2 - NO LOCAL FILES
@@ -510,6 +514,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('User authentication required for video upload');
       }
       
+      console.log(`📊 Creating video record with metadata:`, {
+        videoTitle: upload.videoTitle || null,
+        artistInfo: upload.artistInfo || null,
+        filename: upload.fileName
+      });
+
       const video = await storage.createVideo({
         filename: upload.fileName,
         originalName: upload.fileName,
@@ -521,8 +531,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         artistInfo: upload.artistInfo || null,
         userEmail: userEmail, // CRITICAL: Ensure user email is always set
       });
-      
-      console.log(`✅ Video created in database with user: ${userEmail}, ID: ${video.id}`);
+
+      console.log(`✅ Video created in database with user: ${userEmail}, ID: ${video.id}, title: ${video.videoTitle}, artist: ${video.artistInfo}`);
 
       // Extract video metadata from R2 using signed URL
       try {
