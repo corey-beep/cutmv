@@ -108,17 +108,15 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (error || !user) {
-    console.log('❌ AuthGuard: Authentication failed, redirecting to login', { 
-      error: error?.message, 
+    console.log('❌ AuthGuard: Authentication failed, redirecting to login', {
+      error: error?.message,
       hasUser: !!user,
-      url: window.location.href 
+      url: window.location.href
     });
     // Redirect to login page
     setLocation("/login");
     return null;
   }
-
-  console.log('✅ AuthGuard: Authentication successful, rendering protected content');
 
   const handleOnboardingComplete = async (data: { name: string; marketingConsent: boolean }) => {
     await completeOnboarding(data);
