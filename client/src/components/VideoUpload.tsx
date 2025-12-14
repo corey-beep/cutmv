@@ -119,13 +119,19 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
       });
 
       const data = await response.json();
-      
+
       if (data.success && data.suggestion) {
-        setVideoTitle(data.suggestion.videoTitle);
-        setArtistInfo(data.suggestion.artistInfo);
-        
+        // Only apply AI suggestions if the fields are currently empty
+        // This prevents overwriting user input
+        if (!videoTitle.trim() && data.suggestion.videoTitle) {
+          setVideoTitle(data.suggestion.videoTitle);
+        }
+        if (!artistInfo.trim() && data.suggestion.artistInfo) {
+          setArtistInfo(data.suggestion.artistInfo);
+        }
+
         // Only show toast for successful AI suggestions, not basic ones
-        if (data.source === 'ai') {
+        if (data.source === 'ai' && (!videoTitle.trim() || !artistInfo.trim())) {
           toast({
             title: "AI suggestions generated",
             description: `Generated suggestions with ${Math.round(data.suggestion.confidence * 100)}% confidence`,
