@@ -528,12 +528,15 @@ class BackgroundJobManager {
       // Generate secure download token and URL - FORCE cutmv.fulldigitalll.com domain
       const { downloadTokenManager } = await import('./download-tokens.js');
       const downloadToken = await downloadTokenManager.generateToken(sessionId, downloadPath, job.userEmail, 24);
-      
-      // CRITICAL: Always use cutmv.fulldigitalll.com domain, never Cloudflare R2 URLs in emails
-      const downloadUrl = `${process.env.BASE_URL || 'https://cutmv.fulldigitalll.com'}/api/secure-download/${downloadToken}`;
-      
-      console.log(`🔗 Generated CUTMV domain download URL for ${job.userEmail}: /api/secure-download/${downloadToken.substring(0, 8)}...`);
-      console.log(`📧 Email will use CUTMV URL (not R2): ${downloadUrl}`);
+
+      // Use Railway URL if available, otherwise production domain
+      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : (process.env.BASE_URL || 'https://cutmv-production.up.railway.app');
+      const downloadUrl = `${baseUrl}/api/secure-download/${downloadToken}`;
+
+      console.log(`🔗 Generated download URL for ${job.userEmail}: /api/secure-download/${downloadToken.substring(0, 8)}...`);
+      console.log(`📧 Email will use URL: ${downloadUrl}`);
       
       // Record email delivery
       await this.recordEmailDelivery(sessionId, job.userEmail, 'download_ready', {

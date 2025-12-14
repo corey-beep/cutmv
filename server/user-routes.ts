@@ -236,8 +236,9 @@ router.get('/exports', async (req, res) => {
             
             // If R2 succeeds, generate secure download token (expires in 24 hours)
             const token = await downloadTokenManager.generateToken(job.sessionId, filename, userEmail, 24);
-            downloadUrl = `${process.env.BASE_URL || 'https://cutmv.fulldigitalll.com'}/api/secure-download/${token}`;
-            console.log(`📊 Dashboard: Generated CUTMV download URL for ${userEmail}: ${downloadUrl} (R2 per-user verified)`);
+            // Use relative URL so it works on both Railway preview and production
+            downloadUrl = `/api/secure-download/${token}`;
+            console.log(`📊 Dashboard: Generated secure download URL for ${userEmail}: ${downloadUrl} (R2 per-user verified)`);
           } else {
             // Mark old exports that don't have per-user structure as expired
             console.log(`📊 Dashboard: Old export ${filename} marked as expired - not in per-user R2 structure`);
@@ -343,9 +344,10 @@ router.post('/generate-download-token', async (req, res) => {
     // Generate new download token
     const { downloadTokenManager } = await import('./download-tokens.js');
     const downloadToken = await downloadTokenManager.generateToken(sessionId, filename, req.user.email, 24);
-    
-    const downloadUrl = `${process.env.BASE_URL || 'https://cutmv.fulldigitalll.com'}/api/secure-download/${downloadToken}`;
-    
+
+    // Use relative URL for dashboard downloads
+    const downloadUrl = `/api/secure-download/${downloadToken}`;
+
     res.json({ downloadUrl, token: downloadToken });
   } catch (error) {
     console.error('❌ Error generating download token:', error);
