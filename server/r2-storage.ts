@@ -585,16 +585,23 @@ Support: Available via platform interface
       // 1. Object metadata matches user email
       // 2. R2 key contains user-specific path with encoded email
       // 3. User is authenticated (fallback for exports without metadata)
-      const encodedEmail = Buffer.from(userEmail.split('@')[0]).toString('base64').replace(/=/g, '');
-      const userPath = `user-${encodedEmail}`;
-      const keyContainsUserPath = r2Key.includes(userPath);
+
+      // Try both encoding methods (with and without @)
+      const emailPrefix = userEmail.split('@')[0];
+      const encodedWithoutAt = Buffer.from(emailPrefix).toString('base64').replace(/=/g, '');
+      const encodedWithAt = Buffer.from(emailPrefix + '@').toString('base64').replace(/=/g, '');
+
+      const userPathWithoutAt = `user-${encodedWithoutAt}`;
+      const userPathWithAt = `user-${encodedWithAt}`;
+
+      const keyContainsUserPath = r2Key.includes(userPathWithoutAt) || r2Key.includes(userPathWithAt);
 
       const hasAccess = (objectUserEmail === userEmail) ||
                        keyContainsUserPath ||
                        (userEmail && r2Key.includes('exports/')); // Allow authenticated users to access exports
 
       console.log(`🔐 User access check: ${r2Key} for ${userEmail} = ${hasAccess ? 'GRANTED' : 'DENIED'}`);
-      console.log(`🔍 Validation: metadata=${objectUserEmail}, userPath=${userPath}, keyContains=${keyContainsUserPath}`);
+      console.log(`🔍 Validation: metadata=${objectUserEmail}, paths=${userPathWithoutAt}|${userPathWithAt}, keyContains=${keyContainsUserPath}`);
 
       return hasAccess;
     } catch (error) {
