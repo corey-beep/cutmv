@@ -91,12 +91,12 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     }
   };
 
-  // AI metadata suggestion function
-  const generateAISuggestions = async (file: File) => {
-    if (!file) return;
+  // AI metadata suggestion function - now returns the suggested values
+  const generateAISuggestions = async (file: File): Promise<{ videoTitle: string; artistInfo: string } | null> => {
+    if (!file) return null;
 
     setIsGeneratingSuggestions(true);
-    
+
     try {
       // Debug authentication before making the request
       console.log('🔐 Auth debug for metadata request:', {
@@ -104,7 +104,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
         hasSession: document.cookie.includes('cutmv-session'),
         timestamp: new Date().toISOString()
       });
-      
+
       const response = await fetch('/api/suggest-metadata', {
         method: 'POST',
         headers: {
@@ -130,12 +130,16 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
         artistInfoEmpty: !artistInfo.trim()
       });
 
+      let suggestedVideoTitle = videoTitle;
+      let suggestedArtistInfo = artistInfo;
+
       if (data.success && data.suggestion) {
         // Only apply AI suggestions if the fields are currently empty
         // This prevents overwriting user input
         if (!videoTitle.trim() && data.suggestion.videoTitle) {
           console.log('✅ Applying AI suggestion for video title:', data.suggestion.videoTitle);
           setVideoTitle(data.suggestion.videoTitle);
+          suggestedVideoTitle = data.suggestion.videoTitle;
         } else if (videoTitle.trim()) {
           console.log('⏭️ Skipping video title suggestion - user already entered:', videoTitle);
         }
@@ -143,6 +147,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
         if (!artistInfo.trim() && data.suggestion.artistInfo) {
           console.log('✅ Applying AI suggestion for artist info:', data.suggestion.artistInfo);
           setArtistInfo(data.suggestion.artistInfo);
+          suggestedArtistInfo = data.suggestion.artistInfo;
         } else if (artistInfo.trim()) {
           console.log('⏭️ Skipping artist info suggestion - user already entered:', artistInfo);
         }
@@ -157,10 +162,13 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
       } else if (data.message !== 'No suggestions generated') {
         throw new Error(data.message || 'Failed to generate suggestions');
       }
+
+      return { videoTitle: suggestedVideoTitle, artistInfo: suggestedArtistInfo };
     } catch (error) {
       console.warn('AI suggestion error (non-critical):', error);
       // Silent fail for AI suggestions - they're not critical for upload functionality
       // Don't show error toast to user, just log for debugging
+      return null;
     } finally {
       setIsGeneratingSuggestions(false);
     }
@@ -244,7 +252,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
   };
 
   // Bulletproof chunked upload with retry logic for files up to 10GB
-  const uploadFileInChunks = async (file: File, chunkSize: number, abortController: AbortController): Promise<Response> => {
+  const uploadFileInChunks = async (file: File, chunkSize: number, abortController: AbortController, metadata: { videoTitle: string; artistInfo: string }): Promise<Response> => {
     const totalChunks = Math.ceil(file.size / chunkSize);
     const completedChunks = new Set<number>();
     const failedChunks = new Map<number, number>(); // chunk index -> retry count
@@ -292,12 +300,12 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     console.log(`📤 Finalizing upload for ${file.name} (${totalChunks} chunks, ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
     console.log(`⏳ Processing video metadata... This may take 1-2 minutes for large files...`);
     console.log(`📝 Sending metadata to server:`, {
-      videoTitle: videoTitle.trim() || undefined,
-      artistInfo: artistInfo.trim() || undefined,
-      videoTitleLength: videoTitle.length,
-      artistInfoLength: artistInfo.length,
-      rawVideoTitle: videoTitle,
-      rawArtistInfo: artistInfo
+      videoTitle: metadata.videoTitle.trim() || undefined,
+      artistInfo: metadata.artistInfo.trim() || undefined,
+      videoTitleLength: metadata.videoTitle.length,
+      artistInfoLength: metadata.artistInfo.length,
+      rawVideoTitle: metadata.videoTitle,
+      rawArtistInfo: metadata.artistInfo
     });
 
     const response = await fetch('/api/finalize-upload', {
@@ -309,8 +317,8 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
         fileName: file.name,
         totalSize: file.size,
         totalChunks,
-        videoTitle: videoTitle.trim() || undefined,
-        artistInfo: artistInfo.trim() || undefined,
+        videoTitle: metadata.videoTitle.trim() || undefined,
+        artistInfo: metadata.artistInfo.trim() || undefined,
       }),
       signal: abortController.signal
     });
@@ -376,9 +384,17 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     const file = acceptedFiles[0];
     if (!file) return;
 
-    // Generate AI suggestions immediately after file selection (non-blocking)
-    generateAISuggestions(file);
+    // Generate AI suggestions and WAIT for them before starting upload
+    // This ensures metadata is populated before we send it to the server
+    const aiSuggestions = await generateAISuggestions(file);
 
+    // Use AI-suggested values or fall back to current state
+    const metadataToSend = {
+      videoTitle: aiSuggestions?.videoTitle || videoTitle,
+      artistInfo: aiSuggestions?.artistInfo || artistInfo
+    };
+
+    console.log('📋 Metadata prepared for upload:', metadataToSend);
     console.log('Starting secure upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
     
     // Security: Validate file before upload
@@ -470,13 +486,13 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
           description: `${strategy} mode: ${totalChunks} chunks of ${Math.round(chunkSize/1024/1024)}MB each${deviceNote}`,
         });
         
-        response = await uploadFileInChunks(file, chunkSize, controller);
+        response = await uploadFileInChunks(file, chunkSize, controller, metadataToSend);
       } else {
         console.log('Regular upload for small file...');
         const formData = new FormData();
         formData.append('video', file);
-        if (videoTitle.trim()) formData.append('videoTitle', videoTitle.trim());
-        if (artistInfo.trim()) formData.append('artistInfo', artistInfo.trim());
+        if (metadataToSend.videoTitle.trim()) formData.append('videoTitle', metadataToSend.videoTitle.trim());
+        if (metadataToSend.artistInfo.trim()) formData.append('artistInfo', metadataToSend.artistInfo.trim());
         
         // Comprehensive pre-upload diagnostics
         try {
