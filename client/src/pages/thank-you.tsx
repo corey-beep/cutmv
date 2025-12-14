@@ -169,7 +169,7 @@ export default function ThankYou() {
                 Your files will be delivered to:
               </p>
               <p className="font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border text-brand-green font-medium break-all">
-                {userEmail || 'your email address'}
+                {userEmail || 'Loading email...'}
               </p>
               
               {/* Email Fallback */}
