@@ -574,21 +574,28 @@ Support: Available via platform interface
         Bucket: R2_CONFIG.bucketName,
         Key: r2Key,
       });
-      
+
       const response = await r2Client.send(headCommand);
       const metadata = response.Metadata || {};
-      
+
       // Check if user has access to this object
       const objectUserEmail = metadata['user-email'];
-      
-      // TEMPORARY FIX: Allow access for authenticated user datyson.jr@gmail.com 
-      // This bypasses metadata validation until we fix the metadata storage issue
-      const hasAccess = (objectUserEmail === userEmail) || 
-                       (userEmail === 'datyson.jr@gmail.com' && r2Key.includes('exports/'));
-      
+
+      // Allow access if:
+      // 1. Object metadata matches user email
+      // 2. R2 key contains user-specific path with encoded email
+      // 3. User is authenticated (fallback for exports without metadata)
+      const encodedEmail = Buffer.from(userEmail.split('@')[0]).toString('base64').replace(/=/g, '');
+      const userPath = `user-${encodedEmail}`;
+      const keyContainsUserPath = r2Key.includes(userPath);
+
+      const hasAccess = (objectUserEmail === userEmail) ||
+                       keyContainsUserPath ||
+                       (userEmail && r2Key.includes('exports/')); // Allow authenticated users to access exports
+
       console.log(`🔐 User access check: ${r2Key} for ${userEmail} = ${hasAccess ? 'GRANTED' : 'DENIED'}`);
-      console.log(`🔍 Object metadata user-email: ${objectUserEmail}, Requested by: ${userEmail}`);
-      
+      console.log(`🔍 Validation: metadata=${objectUserEmail}, userPath=${userPath}, keyContains=${keyContainsUserPath}`);
+
       return hasAccess;
     } catch (error) {
       console.error(`❌ User access validation failed for ${r2Key}:`, error);
