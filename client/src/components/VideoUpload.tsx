@@ -120,14 +120,31 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
 
       const data = await response.json();
 
+      console.log('🤖 AI suggestion response:', {
+        success: data.success,
+        source: data.source,
+        suggestion: data.suggestion,
+        currentVideoTitle: videoTitle,
+        currentArtistInfo: artistInfo,
+        videoTitleEmpty: !videoTitle.trim(),
+        artistInfoEmpty: !artistInfo.trim()
+      });
+
       if (data.success && data.suggestion) {
         // Only apply AI suggestions if the fields are currently empty
         // This prevents overwriting user input
         if (!videoTitle.trim() && data.suggestion.videoTitle) {
+          console.log('✅ Applying AI suggestion for video title:', data.suggestion.videoTitle);
           setVideoTitle(data.suggestion.videoTitle);
+        } else if (videoTitle.trim()) {
+          console.log('⏭️ Skipping video title suggestion - user already entered:', videoTitle);
         }
+
         if (!artistInfo.trim() && data.suggestion.artistInfo) {
+          console.log('✅ Applying AI suggestion for artist info:', data.suggestion.artistInfo);
           setArtistInfo(data.suggestion.artistInfo);
+        } else if (artistInfo.trim()) {
+          console.log('⏭️ Skipping artist info suggestion - user already entered:', artistInfo);
         }
 
         // Only show toast for successful AI suggestions, not basic ones
@@ -278,7 +295,9 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
       videoTitle: videoTitle.trim() || undefined,
       artistInfo: artistInfo.trim() || undefined,
       videoTitleLength: videoTitle.length,
-      artistInfoLength: artistInfo.length
+      artistInfoLength: artistInfo.length,
+      rawVideoTitle: videoTitle,
+      rawArtistInfo: artistInfo
     });
 
     const response = await fetch('/api/finalize-upload', {
