@@ -66,19 +66,16 @@ interface PricingData {
 export default function PricingCalculator({ onPaymentRequired, onFreeSessionCreated, defaultConfig, videoMetadata, onVideoUpload, uploadedVideo, onTimestampTextChange, generateCutdowns, setGenerateCutdowns, onTimestampsGenerated, onRegisterGenerateFunction }: PricingCalculatorProps) {
   // Get authenticated user
   const { user } = useAuth();
-  
-  // Debug logging to track video state
-  console.log('PricingCalculator render - uploadedVideo:', uploadedVideo);
-  
+
   // Local video state to handle uploads within this component
   const [localUploadedVideo, setLocalUploadedVideo] = useState<Video | null>(uploadedVideo || null);
   
   // Update local state when prop changes
   useEffect(() => {
-    if (uploadedVideo && uploadedVideo !== localUploadedVideo) {
+    if (uploadedVideo) {
       console.log('PricingCalculator: Updating local video state from prop:', uploadedVideo);
       setLocalUploadedVideo(uploadedVideo);
-      
+
       // Apply smart aspect ratio defaults when video uploads
       if (uploadedVideo.aspectRatio) {
         console.log(`📐 Applying smart aspect ratio default: ${uploadedVideo.aspectRatio}`);
@@ -94,7 +91,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
         });
       }
     }
-  }, [uploadedVideo, localUploadedVideo]);
+  }, [uploadedVideo]);
   
 
 
@@ -347,11 +344,6 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
 
   // Use local video state if available, otherwise use prop
   const currentVideo = localUploadedVideo || uploadedVideo;
-  
-  // Debug currentVideo state
-  console.log('PricingCalculator currentVideo:', currentVideo);
-  console.log('PricingCalculator localUploadedVideo:', localUploadedVideo);
-  console.log('PricingCalculator uploadedVideo prop:', uploadedVideo);
 
   const handlePayment = async () => {
     // Log payment attempt with Sentry (wrapped in try-catch to prevent blocking UI)
@@ -721,20 +713,6 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
 
   const hasExports = config.generateGif || config.generateThumbnails || config.generateCanvas;
   const hasAnyFeature = generateCutdowns || hasExports;
-
-  // Debug logging for button state
-  console.log('🔘 Button State Debug:', {
-    hasAnyFeature,
-    generateCutdowns,
-    hasExports,
-    userEmail: config.userEmail,
-    totalAmount,
-    discountApplied,
-    isCreatingCheckout,
-    currentVideo: !!currentVideo,
-    buttonShouldShow: hasAnyFeature,
-    buttonShouldBeEnabled: hasAnyFeature && config.userEmail?.trim() && !(totalAmount === 0 && discountApplied === 0) && !isCreatingCheckout
-  });
 
   return (
     <div className="space-y-6">
