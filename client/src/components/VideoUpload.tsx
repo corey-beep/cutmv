@@ -268,7 +268,13 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     // Finalize the upload with enhanced error handling
     console.log(`📤 Finalizing upload for ${file.name} (${totalChunks} chunks, ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
     console.log(`⏳ Processing video metadata... This may take 1-2 minutes for large files...`);
-    
+    console.log(`📝 Sending metadata to server:`, {
+      videoTitle: videoTitle.trim() || undefined,
+      artistInfo: artistInfo.trim() || undefined,
+      videoTitleLength: videoTitle.length,
+      artistInfoLength: artistInfo.length
+    });
+
     const response = await fetch('/api/finalize-upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
