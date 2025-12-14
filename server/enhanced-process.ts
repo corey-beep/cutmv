@@ -708,82 +708,10 @@ class EnhancedProcessor {
     console.log(`📥 CANVAS DEBUG - Download target: ${localPath}`);
     
     try {
-      // Download from R2 using the r2_key by getting a FRESH signed URL (expired URLs cause failures)
-      console.log(`📥 Getting fresh signed URL for R2 key: ${video.r2Key}`);
-      
-      // First, test if the file exists with a HEAD request
-      let signedUrl;
-      try {
-        signedUrl = await R2Storage.getSignedUrl(video.r2Key, 7200); // 2 hours expiry for processing
-        console.log(`📥 CANVAS DEBUG - Generated signed URL: ${signedUrl.substring(0, 100)}...`);
-        
-        // Test file existence with HEAD request
-        const headResponse = await fetch(signedUrl, { method: 'HEAD' });
-        if (!headResponse.ok) {
-          console.error(`❌ R2 HEAD request failed: ${headResponse.status} ${headResponse.statusText}`);
-          console.error(`❌ Failed URL: ${signedUrl.substring(0, 100)}...`);
-          throw new Error(`R2 access denied (HTTP ${headResponse.status}): File may not exist or signed URL is invalid`);
-        }
-        console.log(`📥 CANVAS DEBUG - File exists in R2, Content-Length: ${headResponse.headers.get('content-length')}`);
-      } catch (r2Error) {
-        console.error(`❌ R2 file access error:`, r2Error);
-        throw new Error(`R2 file access failed: ${r2Error instanceof Error ? r2Error.message : 'Unknown error'}`);
-      }
-      
-      console.log(`📥 CANVAS DEBUG - Starting fetch from R2...`);
-      
-      // Add timeout for R2 download with proper error handling
-      const controller = new AbortController();
-      const downloadTimeout = setTimeout(() => {
-        console.error(`⏰ R2 download respects unified deadline - insufficient time remaining for video ${videoId}`);
-        controller.abort();
-      }, 1800000); // 30 minutes for large files
-      
-      let response;
-      try {
-        response = await fetch(signedUrl, { 
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'CUTMV-Processor/1.0'
-          }
-        });
-        clearTimeout(downloadTimeout);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-      } catch (fetchError) {
-        clearTimeout(downloadTimeout);
-        
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          throw new Error(`Download timeout: Video file too large or connection interrupted`);
-        }
-        throw fetchError;
-      }
-      
-      console.log(`📥 CANVAS DEBUG - R2 response received, content-length: ${response.headers.get('content-length')}`);
-      
-      const contentLength = response.headers.get('content-length');
-      if (contentLength) {
-        console.log(`📥 CANVAS DEBUG - Video size: ${Math.round(parseInt(contentLength) / 1024 / 1024)} MB`);
-      }
-      
-      console.log(`📥 CANVAS DEBUG - Converting response to buffer...`);
-      
-      // Handle large files with streaming to avoid memory issues
-      let arrayBuffer;
-      try {
-        arrayBuffer = await response.arrayBuffer();
-        console.log(`📥 CANVAS DEBUG - Buffer conversion complete, size: ${arrayBuffer.byteLength} bytes`);
-        
-        if (arrayBuffer.byteLength === 0) {
-          throw new Error('Downloaded file is empty - R2 download failed');
-        }
-      } catch (bufferError) {
-        throw new Error(`Failed to read video data: ${bufferError instanceof Error ? bufferError.message : 'Unknown error'}`);
-      }
-      
-      const fileBuffer = Buffer.from(arrayBuffer);
+      // Download from R2 directly using SDK (avoids signed URL 403 errors)
+      console.log(`📥 Downloading directly from R2 using SDK: ${video.r2Key}`);
+
+      const fileBuffer = await R2Storage.downloadFile(video.r2Key);
       console.log(`📥 CANVAS DEBUG - Writing ${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB to ${localPath}...`);
       
       try {

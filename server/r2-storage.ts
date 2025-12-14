@@ -80,6 +80,43 @@ export class R2Storage {
   }
 
   /**
+   * Download file directly from R2 using SDK (avoids signed URL 403 issues)
+   */
+  static async downloadFile(r2Key: string): Promise<Buffer> {
+    if (!isR2Configured) {
+      throw new Error('R2 storage is not properly configured');
+    }
+
+    try {
+      console.log(`📥 Downloading file from R2: ${r2Key}`);
+
+      const command = new GetObjectCommand({
+        Bucket: R2_CONFIG.bucketName,
+        Key: r2Key,
+      });
+
+      const response = await r2Client.send(command);
+
+      if (!response.Body) {
+        throw new Error('No data received from R2');
+      }
+
+      // Convert stream to buffer
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of response.Body as any) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+
+      console.log(`✅ Downloaded ${buffer.length} bytes from R2: ${r2Key}`);
+      return buffer;
+    } catch (error: any) {
+      console.error(`❌ Failed to download from R2: ${r2Key}`, error);
+      throw new Error(`R2 download failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate a signed URL for private access (if needed)
    */
   static async getSignedUrl(r2Key: string, expiresInSeconds: number = 86400): Promise<string> { // Default 24 hours
@@ -89,7 +126,7 @@ export class R2Storage {
 
     try {
       console.log(`🔗 Generating signed URL for: ${r2Key} (expires in ${expiresInSeconds}s)`);
-      
+
       // First check if the object exists with detailed error handling
       try {
         const headCommand = new HeadObjectCommand({
@@ -105,7 +142,7 @@ export class R2Storage {
           message: headError.message,
           statusCode: headError.$response?.statusCode
         });
-        
+
         if (errorCode === 'NotFound' || errorCode === 'NoSuchKey') {
           throw new Error(`NoSuchKey: File not found in R2 storage: ${r2Key}`);
         } else if (errorCode === 'AccessDenied') {
@@ -114,8 +151,9 @@ export class R2Storage {
           throw new Error(`R2 verification failed (${errorCode}): ${headError.message}`);
         }
       }
-      
-      // Try different signing approach to fix 403 errors
+
+      // WORKAROUND: R2 signed URLs have issues, use direct download method instead
+      console.log(`⚠️ Note: R2 signed URLs may not work - use R2Storage.downloadFile() for processing`);
       const command = new GetObjectCommand({
         Bucket: R2_CONFIG.bucketName,
         Key: r2Key,
