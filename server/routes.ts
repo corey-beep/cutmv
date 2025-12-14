@@ -1253,16 +1253,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`🚫 Access denied: User ${tokenData.userEmail} cannot access ${r2Key}`);
             return res.status(403).json({ error: 'Access denied to this export' });
           }
-          
-          // Generate fresh signed URL (always fresh since they expire)
-          const presignedUrl = await R2Storage.getSignedUrl(r2Key, 3600);
-          
-          if (presignedUrl) {
-            console.log(`✅ Fresh R2 signed URL generated for: ${r2Key} by ${tokenData.userEmail}`);
-            // Update background job with fresh URL
-            await storage.updateBackgroundJob(backgroundJob.sessionId, { r2DownloadUrl: presignedUrl });
-            return res.redirect(302, presignedUrl);
-          }
+
+          // WORKAROUND: R2 signed URLs are returning 403
+          // Use direct download via SDK instead of redirecting to signed URL
+          console.log(`📥 Downloading file directly from R2 (signed URL workaround): ${r2Key}`);
+
+          const fileBuffer = await R2Storage.downloadFile(r2Key);
+          const filename = r2Key.split('/').pop() || 'download.zip';
+
+          res.setHeader('Content-Type', 'application/zip');
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.setHeader('Content-Length', fileBuffer.length);
+
+          console.log(`✅ Serving ${fileBuffer.length} bytes directly for: ${r2Key} to ${tokenData.userEmail}`);
+          return res.send(fileBuffer);
         } catch (r2Error: any) {
           const errorCode = r2Error.name || r2Error.code || 'UnknownError';
           console.error(`❌ R2 signed URL generation failed for ${r2Key}:`, {
