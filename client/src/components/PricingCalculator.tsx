@@ -1216,11 +1216,11 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
               <div className="flex justify-between">
                 <span>Video Cutdowns ({countTimestamps(config.timestampText)} × {config.aspectRatios.length} formats)</span>
                 <span>
-                  ${formatPrice(countTimestamps(config.timestampText) * config.aspectRatios.length * pricing.cutdown16x9)}
+                  {formatCredits(countTimestamps(config.timestampText) * config.aspectRatios.length * pricing.cutdown16x9)} credits
                 </span>
               </div>
             )}
-            
+
             {hasExports && !config.useFullPack && (
               <>
                 {config.generateGif && (
@@ -1230,7 +1230,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                       const totalSeconds = minutes * 60 + seconds;
                       return totalSeconds < 40 ? '5' : '10';
                     })()} × 6-second clips)</span>
-                    <span>${formatPrice(pricing.gifPack)}</span>
+                    <span>{formatCredits(pricing.gifPack)} credits</span>
                   </div>
                 )}
                 {config.generateThumbnails && (
@@ -1240,7 +1240,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                       const totalSeconds = minutes * 60 + seconds;
                       return totalSeconds < 40 ? '5' : '10';
                     })()} high-quality stills)</span>
-                    <span>${formatPrice(pricing.thumbnailPack)}</span>
+                    <span>{formatCredits(pricing.thumbnailPack)} credits</span>
                   </div>
                 )}
                 {config.generateCanvas && (
@@ -1250,7 +1250,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                       const totalSeconds = minutes * 60 + seconds;
                       return totalSeconds < 40 ? '2' : '5';
                     })()} × 8-second loops)</span>
-                    <span>${formatPrice(pricing.spotifyCanvas)}</span>
+                    <span>{formatCredits(pricing.spotifyCanvas)} credits</span>
                   </div>
                 )}
               </>
@@ -1259,7 +1259,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
             {config.useFullPack && hasExports && (
               <div className="flex justify-between">
                 <span>Full Feature Pack (GIFs + Thumbnails + Canvas)</span>
-                <span>${formatPrice(pricing.fullFeaturePack)}</span>
+                <span>{formatCredits(pricing.fullFeaturePack)} credits</span>
               </div>
             )}
 
@@ -1269,26 +1269,26 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
             {discountApplied > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount ({promoValidation?.code || 'Promo Code'})</span>
-                <span>-${formatPrice(discountApplied)}</span>
+                <span>-{formatCredits(discountApplied)} credits</span>
               </div>
             )}
 
             <Separator />
-            
+
             {/* Show original total if discount applied */}
             {discountApplied > 0 && (
               <div className="flex justify-between text-sm text-gray-500 line-through">
                 <span>Original Total</span>
-                <span>${formatPrice(originalAmount)}</span>
+                <span>{formatCredits(originalAmount)} credits</span>
               </div>
             )}
-            
+
             <div className="flex justify-between text-lg font-semibold">
               <span>Total</span>
               <span className={discountApplied > 0 && totalAmount === 0 ? "text-green-600" : ""}>
                 {totalAmount === 0 && discountApplied > 0 ? "FREE" :
                  totalAmount === 0 ? "Select features above" :
-                 `$${formatPrice(totalAmount)}`}
+                 `${formatCredits(totalAmount)} credits`}
               </span>
             </div>
             
