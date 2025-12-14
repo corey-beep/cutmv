@@ -840,38 +840,6 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
 
   return (
     <div className="space-y-6">
-      {/* Optional metadata fields */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="videoTitle" className="text-sm font-medium">
-            Video Title <span className="text-gray-400">(optional)</span>
-          </Label>
-          <Input
-            id="videoTitle"
-            type="text"
-            placeholder="e.g., Dreams Come True"
-            value={videoTitle}
-            onChange={(e) => setVideoTitle(e.target.value)}
-            disabled={isUploading || isProcessingVideo}
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor="artistInfo" className="text-sm font-medium">
-            Artist / Song Info <span className="text-gray-400">(optional)</span>
-          </Label>
-          <Input
-            id="artistInfo"
-            type="text"
-            placeholder="e.g., Artist — Song Title"
-            value={artistInfo}
-            onChange={(e) => setArtistInfo(e.target.value)}
-            disabled={isUploading || isProcessingVideo}
-            className="mt-1"
-          />
-        </div>
-      </div>
-
       {/* Upload area */}
       <div
         {...getRootProps()}
