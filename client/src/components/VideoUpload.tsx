@@ -783,7 +783,8 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
 
   if (uploadedVideo) {
     return (
-      <div className="mt-6">
+      <div className="space-y-6">
+        {/* Video Info Card */}
         <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
           <div className="w-16 h-16 bg-gray-300 rounded-lg flex items-center justify-center">
             <Play className="text-gray-600" />
@@ -802,6 +803,36 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
           >
             <Trash2 className="w-4 h-4" />
           </Button>
+        </div>
+
+        {/* Metadata fields - editable after upload */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="videoTitle" className="text-sm font-medium">
+              Video Title <span className="text-gray-400">(optional)</span>
+            </Label>
+            <Input
+              id="videoTitle"
+              type="text"
+              placeholder="e.g., Dreams Come True"
+              value={videoTitle}
+              onChange={(e) => setVideoTitle(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="artistInfo" className="text-sm font-medium">
+              Artist / Song Info <span className="text-gray-400">(optional)</span>
+            </Label>
+            <Input
+              id="artistInfo"
+              type="text"
+              placeholder="e.g., Artist — Song Title"
+              value={artistInfo}
+              onChange={(e) => setArtistInfo(e.target.value)}
+              className="mt-1"
+            />
+          </div>
         </div>
       </div>
     );
