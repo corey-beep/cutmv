@@ -676,6 +676,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      console.log('📝 Direct upload metadata received:', {
+        videoTitle: req.body.videoTitle,
+        artistInfo: req.body.artistInfo,
+        filename: req.file.originalname
+      });
+
       const video = await storage.createVideo({
         filename: req.file.originalname,
         originalName: req.file.originalname,
@@ -688,7 +694,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         r2Url: r2Url,
       });
 
-      console.log('Video created in storage:', video);
+      console.log('✅ Direct upload: Video created in database:', {
+        id: video.id,
+        videoTitle: video.videoTitle,
+        artistInfo: video.artistInfo,
+        originalName: video.originalName
+      });
 
       // Return video immediately - metadata extraction will be done by frontend if needed
       console.log('Returning video:', video);
