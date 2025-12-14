@@ -12,17 +12,19 @@ import { Progress } from "@/components/ui/progress";
 import { useWebSocketProgress } from "@/hooks/useWebSocketProgress";
 import { useState, useEffect } from "react";
 import fdLogo from "@/assets/fd-logo.png";
+import { useAuth } from "@/components/AuthGuard";
 
 export default function ThankYou() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth(); // Get authenticated user
   const [videoId, setVideoId] = useState<number | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  
+
   // Get encrypted session token from URL (no sensitive data exposed)
   const params = new URLSearchParams(location.search);
   const sessionToken = params.get('session') || '';
-  
+
   // Decrypt session data on client side via API
   const [sessionData, setSessionData] = useState<{
     email: string;
@@ -169,7 +171,7 @@ export default function ThankYou() {
                 Your files will be delivered to:
               </p>
               <p className="font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border text-brand-green font-medium break-all">
-                {userEmail || 'Loading email...'}
+                {userEmail || user?.email || 'Loading email...'}
               </p>
               
               {/* Email Fallback */}
