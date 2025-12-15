@@ -604,6 +604,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update video metadata endpoint
+  app.patch('/api/videos/:id/metadata', requireAuth, async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      const { videoTitle, artistInfo } = req.body;
+
+      console.log(`📝 Updating metadata for video ${videoId}:`, { videoTitle, artistInfo });
+
+      // Get the video to verify ownership
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ error: 'Video not found' });
+      }
+
+      // Verify user owns this video
+      if (video.userEmail !== req.user?.email) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Update metadata
+      const updated = await storage.updateVideo(videoId, {
+        videoTitle: videoTitle || null,
+        artistInfo: artistInfo || null
+      });
+
+      console.log(`✅ Video ${videoId} metadata updated successfully`);
+      res.json({ success: true, video: updated });
+    } catch (error) {
+      console.error('Failed to update video metadata:', error);
+      res.status(500).json({ error: 'Failed to update metadata' });
+    }
+  });
+
   // Add direct upload endpoint for small files with full metadata extraction
   app.post('/api/upload', requireAuth, upload.single('video'), async (req, res) => {
     try {

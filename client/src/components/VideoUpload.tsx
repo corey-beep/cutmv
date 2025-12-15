@@ -40,6 +40,24 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
   const [authStatus, setAuthStatus] = useState<'checking' | 'valid' | 'invalid'>('checking');
   const { toast } = useToast();
 
+  // Update video metadata in database when user edits fields after upload
+  const updateVideoMetadata = async (videoId: number, title: string, artist: string) => {
+    try {
+      await fetch(`/api/videos/${videoId}/metadata`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          videoTitle: title.trim() || null,
+          artistInfo: artist.trim() || null
+        })
+      });
+      console.log('✅ Video metadata updated:', { videoTitle: title, artistInfo: artist });
+    } catch (error) {
+      console.error('Failed to update video metadata:', error);
+    }
+  };
+
   // Automatic background authentication validation
   useEffect(() => {
     const validateAuth = async () => {
@@ -816,7 +834,13 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
               type="text"
               placeholder="e.g., Dreams Come True"
               value={videoTitle}
-              onChange={(e) => setVideoTitle(e.target.value)}
+              onChange={(e) => {
+                setVideoTitle(e.target.value);
+                // Update database when user types
+                if (uploadedVideo?.id) {
+                  updateVideoMetadata(uploadedVideo.id, e.target.value, artistInfo);
+                }
+              }}
               className="mt-1"
             />
           </div>
@@ -829,7 +853,13 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
               type="text"
               placeholder="e.g., Artist — Song Title"
               value={artistInfo}
-              onChange={(e) => setArtistInfo(e.target.value)}
+              onChange={(e) => {
+                setArtistInfo(e.target.value);
+                // Update database when user types
+                if (uploadedVideo?.id) {
+                  updateVideoMetadata(uploadedVideo.id, videoTitle, e.target.value);
+                }
+              }}
               className="mt-1"
             />
           </div>
