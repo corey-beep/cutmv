@@ -1652,6 +1652,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error(`Video ${videoId} not found`);
         }
 
+        console.log(`📼 Loaded video ${videoId} metadata from database:`, {
+          videoTitle: video.videoTitle,
+          artistInfo: video.artistInfo,
+          originalName: video.originalName
+        });
         console.log(`💳 Payment completed for video ${videoId}, starting processing...`);
         
         // Start processing
