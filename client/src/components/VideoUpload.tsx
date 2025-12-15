@@ -270,7 +270,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
   };
 
   // Bulletproof chunked upload with retry logic for files up to 10GB
-  const uploadFileInChunks = async (file: File, chunkSize: number, abortController: AbortController, metadata: { videoTitle: string; artistInfo: string }): Promise<Response> => {
+  const uploadFileInChunks = async (file: File, chunkSize: number, abortController: AbortController): Promise<Response> => {
     const totalChunks = Math.ceil(file.size / chunkSize);
     const completedChunks = new Set<number>();
     const failedChunks = new Map<number, number>(); // chunk index -> retry count
@@ -317,14 +317,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     // Finalize the upload with enhanced error handling
     console.log(`📤 Finalizing upload for ${file.name} (${totalChunks} chunks, ${(file.size / 1024 / 1024).toFixed(2)}MB)`);
     console.log(`⏳ Processing video metadata... This may take 1-2 minutes for large files...`);
-    console.log(`📝 Sending metadata to server:`, {
-      videoTitle: metadata.videoTitle.trim() || undefined,
-      artistInfo: metadata.artistInfo.trim() || undefined,
-      videoTitleLength: metadata.videoTitle.length,
-      artistInfoLength: metadata.artistInfo.length,
-      rawVideoTitle: metadata.videoTitle,
-      rawArtistInfo: metadata.artistInfo
-    });
+    console.log(`📝 Upload finalization - metadata will be set after upload completes`);
 
     const response = await fetch('/api/finalize-upload', {
       method: 'POST',
@@ -335,8 +328,7 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
         fileName: file.name,
         totalSize: file.size,
         totalChunks,
-        videoTitle: metadata.videoTitle.trim() || undefined,
-        artistInfo: metadata.artistInfo.trim() || undefined,
+        // Don't send metadata during upload - it will be updated after upload when user edits fields
       }),
       signal: abortController.signal
     });
@@ -402,18 +394,8 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     const file = acceptedFiles[0];
     if (!file) return;
 
-    // Generate AI suggestions and WAIT for them before starting upload
-    // This ensures metadata is populated before we send it to the server
-    const aiSuggestions = await generateAISuggestions(file);
-
-    // Use AI-suggested values or fall back to current state
-    const metadataToSend = {
-      videoTitle: aiSuggestions?.videoTitle || videoTitle,
-      artistInfo: aiSuggestions?.artistInfo || artistInfo
-    };
-
-    console.log('📋 Metadata prepared for upload:', metadataToSend);
     console.log('Starting secure upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
+    console.log('📋 Metadata will be set by user after upload completes');
     
     // Security: Validate file before upload
     const validation = validateFile(file);
@@ -504,13 +486,12 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
           description: `${strategy} mode: ${totalChunks} chunks of ${Math.round(chunkSize/1024/1024)}MB each${deviceNote}`,
         });
         
-        response = await uploadFileInChunks(file, chunkSize, controller, metadataToSend);
+        response = await uploadFileInChunks(file, chunkSize, controller);
       } else {
         console.log('Regular upload for small file...');
         const formData = new FormData();
         formData.append('video', file);
-        if (metadataToSend.videoTitle.trim()) formData.append('videoTitle', metadataToSend.videoTitle.trim());
-        if (metadataToSend.artistInfo.trim()) formData.append('artistInfo', metadataToSend.artistInfo.trim());
+        // Don't send metadata during upload - it will be updated after upload when user edits fields
         
         // Comprehensive pre-upload diagnostics
         try {
