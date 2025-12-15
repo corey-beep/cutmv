@@ -22,15 +22,26 @@ function parseVideoDuration(duration: string): number {
 
 // Helper function to generate clean filename from video metadata
 function generateCleanFilename(videoData: any): string {
+  console.log('🏷️ Generating filename from metadata:', {
+    videoTitle: videoData.videoTitle,
+    artistInfo: videoData.artistInfo,
+    originalName: videoData.originalName
+  });
+
   // Priority: videoTitle with artistInfo > videoTitle > originalName without extension
   if (videoData.videoTitle && videoData.artistInfo) {
-    return `${videoData.artistInfo} - ${videoData.videoTitle}`;
+    const filename = `${videoData.artistInfo} - ${videoData.videoTitle}`;
+    console.log('✅ Using videoTitle + artistInfo:', filename);
+    return filename;
   }
   if (videoData.videoTitle) {
+    console.log('✅ Using videoTitle only:', videoData.videoTitle);
     return videoData.videoTitle;
   }
   // Fallback to original filename without extension
-  return videoData.originalName?.replace(/\.[^/.]+$/, '') || 'Video';
+  const fallback = videoData.originalName?.replace(/\.[^/.]+$/, '') || 'Video';
+  console.log('⚠️ Using fallback (originalName):', fallback);
+  return fallback;
 }
 import AdmZip from 'adm-zip';
 import path from 'path';
