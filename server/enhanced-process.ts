@@ -561,12 +561,6 @@ class EnhancedProcessor {
         console.log(`🎨 CANVAS DEBUG - Options:`, operation.options);
         
         try {
-          // Check if sufficient time remains for Canvas processing
-          if (job?.deadline && !hasSufficientTimeForStage(job.deadline, 'forward', 30)) {
-            const timeLeft = getTimeLeftMinutes(job.deadline).toFixed(1); // Now null-safe
-            throw new Error(`Insufficient time remaining for Canvas processing (need 30min, have ${timeLeft}min)`);
-          }
-          
           // Canvas operations respect the job deadline
           await ffmpegProcessor.generateCanvasWithProgress(
             operation.inputPath,
