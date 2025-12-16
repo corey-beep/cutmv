@@ -2,6 +2,7 @@
  * © 2025 Full Digital LLC. All Rights Reserved.
  * CUTMV - Unified Timeout Configuration
  * Single source of truth for all processing timeouts
+ * Updated: Fixed Canvas processing 'this' binding issue
  */
 
 export interface JobDeadlineConfig {
