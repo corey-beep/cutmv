@@ -439,11 +439,21 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
       console.log('💳 Processing with credits/promo, total:', totalAmount, 'discount:', discountApplied, 'code:', discountCode);
 
       // Call create-payment-session - it handles credit-based processing
-      const response = await apiRequest("POST", "/api/create-payment-session", {
+      const requestBody = {
         ...config,
         discountCode,
         videoId: uploadedVideo?.id
+      };
+
+      console.log('🎫 Sending payment session request:', {
+        generateGif: requestBody.generateGif,
+        generateThumbnails: requestBody.generateThumbnails,
+        generateCanvas: requestBody.generateCanvas,
+        generateCutdowns: generateCutdowns,
+        timestampText: requestBody.timestampText?.substring(0, 50)
       });
+
+      const response = await apiRequest("POST", "/api/create-payment-session", requestBody);
 
       // Handle insufficient credits error (402 Payment Required)
       if (response.status === 402) {
