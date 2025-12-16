@@ -1140,7 +1140,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <Label className="text-lg font-bold text-green-800">Bundle All Add-ons for $4.99</Label>
+                          <Label className="text-lg font-bold text-green-800">Bundle All Add-ons for {formatCredits(pricing.fullFeaturePack)} credits</Label>
                           <Tooltip>
                             <TooltipTrigger>
                               <HelpCircle className="w-4 h-4 text-green-600" />
@@ -1500,7 +1500,7 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
               }}
               className="w-full bg-green-600 hover:bg-green-700"
             >
-              Yes, Bundle All Add-ons for $4.99
+              Yes, Bundle All Add-ons for {pricing && formatCredits(pricing.fullFeaturePack)} credits
             </Button>
             <Button
               variant="outline"
