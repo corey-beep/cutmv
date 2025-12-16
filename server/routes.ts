@@ -1321,10 +1321,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`📥 Downloading file directly from R2 (signed URL workaround): ${r2Key}`);
 
           const fileBuffer = await R2Storage.downloadFile(r2Key);
-          const filename = r2Key.split('/').pop() || 'download.zip';
+          const rawFilename = r2Key.split('/').pop() || 'download.zip';
+
+          // Strip timestamp and random ID prefix for clean user-facing download filename
+          // R2 storage keeps prefix for tracking, but user downloads are clean
+          const cleanFilename = rawFilename.replace(/^\d+-[a-z0-9]+-/, '');
 
           res.setHeader('Content-Type', 'application/zip');
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.setHeader('Content-Disposition', `attachment; filename="${cleanFilename}"`);
           res.setHeader('Content-Length', fileBuffer.length);
 
           console.log(`✅ Serving ${fileBuffer.length} bytes directly for: ${r2Key} to ${tokenData.userEmail}`);
