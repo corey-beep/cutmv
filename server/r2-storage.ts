@@ -327,7 +327,11 @@ export class R2Storage {
     const ext = path.extname(originalFilename);
     const baseName = path.basename(originalFilename, ext);
     
-    const sanitizedBaseName = baseName.replace(/[^a-zA-Z0-9-_]/g, '-');
+    // Replace non-alphanumeric chars with dashes, then collapse multiple dashes into one
+    const sanitizedBaseName = baseName
+      .replace(/[^a-zA-Z0-9-_]/g, '-')  // Replace special chars with dash
+      .replace(/-+/g, '-')               // Collapse multiple dashes into one
+      .replace(/^-|-$/g, '');            // Remove leading/trailing dashes
     
     // Proper folder organization for each user:
     // user-{hash}/uploads/ - for original video uploads
