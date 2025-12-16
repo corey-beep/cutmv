@@ -275,6 +275,9 @@ class EnhancedProcessor {
       generateCutdowns: options.generateCutdowns,
       hasTimestampText: !!options.timestampText,
       timestampText: options.timestampText?.substring(0, 50),
+      generateGif: options.generateGif,
+      generateThumbnails: options.generateThumbnails,
+      generateCanvas: options.generateCanvas,
       allOptions: Object.keys(options)
     });
 
@@ -360,6 +363,8 @@ class EnhancedProcessor {
       const videoDuration = parseFloat(videoData.duration?.replace(/[^\d.]/g, '') || '0');
       const canvasCount = videoDuration < 40 ? 2 : 5;
 
+      console.log(`🎨 Creating ${canvasCount} Canvas operations (video duration: ${videoDuration}s)`);
+
       for (let i = 0; i < canvasCount; i++) {
         operations.push({
           type: 'canvas',
@@ -372,6 +377,9 @@ class EnhancedProcessor {
           progress: 0,
         });
       }
+      console.log(`📝 Created ${canvasCount} Canvas operations`);
+    } else {
+      console.log(`⏭️ Skipping Canvas operations (generateCanvas: ${options.generateCanvas})`);
     }
 
     return operations;
