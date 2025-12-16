@@ -100,13 +100,24 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     if (uploadController) {
       uploadController.abort();
       setUploadController(null);
-      setIsUploading(false);
-      setUploadProgress(0);
-      toast({
-        title: "Upload cancelled",
-        description: "Video upload has been cancelled.",
-      });
     }
+
+    // Reset all upload state
+    setIsUploading(false);
+    setUploadProgress(0);
+    setSelectedFile(null);
+    setIsProcessingVideo(false);
+
+    // Reset file input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+
+    toast({
+      title: "Upload cancelled",
+      description: "Video upload has been cancelled.",
+    });
   };
 
   // AI metadata suggestion function - now returns the suggested values
