@@ -141,7 +141,6 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
   const [showPromoInput, setShowPromoInput] = useState(false);
   const [promoValidation, setPromoValidation] = useState<any>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
-  const [showBundlePopup, setShowBundlePopup] = useState(false);
   const { toast } = useToast();
   const { sendWelcomeEmail } = useEmailDelivery();
   const { verifyEmail, isVerifying: isVerifyingEmail, lastResult: emailVerificationResult } = useEmailVerification();
@@ -416,17 +415,6 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
         description: "Please enter a valid email address to continue",
         variant: "destructive",
       });
-      return;
-    }
-
-    // Check if bundle offer should be shown (for professional quality exports)
-    const shouldShowBundle = generateCutdowns && config.timestampText.trim() && 
-                            countTimestamps(config.timestampText) > 0 && config.aspectRatios.length > 0 && 
-                            (!config.generateGif || !config.generateThumbnails || !config.generateCanvas) && 
-                            !config.useFullPack;
-    
-    if (shouldShowBundle) {
-      setShowBundlePopup(true);
       return;
     }
 
@@ -1134,33 +1122,43 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                   </div>
                 )}
 
-                {/* 5. Conditional Bundle Offer - Only show if not triggered above and not using cutdowns */}
-                {!generateCutdowns && !config.useFullPack && hasExports && (
-                  <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
+                {/* 5. Bundle Option - Always show when any export option exists */}
+                {hasExports && (
+                  <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <Label className="text-lg font-bold text-green-800">Bundle All Add-ons for {formatCredits(pricing.fullFeaturePack)} credits</Label>
+                          <Label className="text-lg font-bold text-green-900">💎 Bundle All Add-ons</Label>
                           <Tooltip>
                             <TooltipTrigger>
                               <HelpCircle className="w-4 h-4 text-green-600" />
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>AI automatically generates all export types (GIFs, Thumbnails, and Canvas) for one low price. Save credits with this intelligent bundle: {formatCredits(pricing.fullFeaturePack)} credits</p>
+                              <p>Get all three export types (GIFs, Thumbnails, and Canvas) bundled together for maximum value. Save {formatCredits(pricing.gifPack + pricing.thumbnailPack + pricing.spotifyCanvas - pricing.fullFeaturePack)} credits!</p>
                             </TooltipContent>
                           </Tooltip>
                         </div>
-                        <p className="text-sm text-green-700 mt-1">
-                          Includes all export options - significant savings!
-                        </p>
+
+                        {/* Savings Calculation */}
+                        <div className="mt-2 space-y-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-green-900">{formatCredits(pricing.fullFeaturePack)} credits</span>
+                            <span className="text-sm text-gray-500 line-through">{formatCredits(pricing.gifPack + pricing.thumbnailPack + pricing.spotifyCanvas)} credits</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-600 text-white">
+                              Save {formatCredits(pricing.gifPack + pricing.thumbnailPack + pricing.spotifyCanvas - pricing.fullFeaturePack)} credits (36%)
+                            </span>
+                          </div>
+                        </div>
                       </div>
                       <div className="flex-shrink-0 p-2 -m-2">
                         <Switch
                           checked={config.useFullPack}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              setConfig({ 
-                                ...config, 
+                              setConfig({
+                                ...config,
                                 useFullPack: true,
                                 generateGif: true,
                                 generateThumbnails: true,
@@ -1174,6 +1172,50 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
                         />
                       </div>
                     </div>
+
+                    {/* Pricing Comparison Table */}
+                    <details className="mt-3 group">
+                      <summary className="cursor-pointer text-sm text-green-800 font-medium hover:text-green-900 flex items-center gap-1">
+                        <span className="transform transition-transform group-open:rotate-90">▶</span>
+                        Compare pricing options
+                      </summary>
+                      <div className="mt-3 bg-white rounded-lg p-3 border border-green-200">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200">
+                              <th className="text-left py-2 font-semibold text-gray-700">Option</th>
+                              <th className="text-right py-2 font-semibold text-gray-700">Price</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            <tr>
+                              <td className="py-2 text-gray-600">GIF Pack (10 clips)</td>
+                              <td className="py-2 text-right font-medium">{formatCredits(pricing.gifPack)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-2 text-gray-600">Thumbnail Pack (10 images)</td>
+                              <td className="py-2 text-right font-medium">{formatCredits(pricing.thumbnailPack)}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-2 text-gray-600">Canvas Pack (5 loops)</td>
+                              <td className="py-2 text-right font-medium">{formatCredits(pricing.spotifyCanvas)}</td>
+                            </tr>
+                            <tr className="font-semibold text-gray-500">
+                              <td className="py-2 border-t-2 border-gray-300">Total if bought separately</td>
+                              <td className="py-2 text-right border-t-2 border-gray-300 line-through">{formatCredits(pricing.gifPack + pricing.thumbnailPack + pricing.spotifyCanvas)}</td>
+                            </tr>
+                            <tr className="font-bold text-green-900 bg-green-50">
+                              <td className="py-2 border-t-2 border-green-400">💎 Bundle Price</td>
+                              <td className="py-2 text-right border-t-2 border-green-400 text-lg">{formatCredits(pricing.fullFeaturePack)}</td>
+                            </tr>
+                            <tr className="font-semibold text-green-700">
+                              <td className="py-2">You Save</td>
+                              <td className="py-2 text-right">{formatCredits(pricing.gifPack + pricing.thumbnailPack + pricing.spotifyCanvas - pricing.fullFeaturePack)} (36%)</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>
@@ -1475,46 +1517,6 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
           )}
         </CardContent>
       </Card>
-
-      {/* Bundle Upsell Popup */}
-      <Dialog open={showBundlePopup} onOpenChange={setShowBundlePopup}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-center">🎯 Don't forget to bundle and save!</DialogTitle>
-            <DialogDescription className="text-center">
-              Hey! You can get all add-ons (GIFs, Thumbnails, and Spotify Canvas) for just 499 credits instead of paying separately. You're saving up to 50%!
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col space-y-3">
-            <Button
-              onClick={() => {
-                setConfig({
-                  ...config,
-                  useFullPack: true,
-                  generateGif: true,
-                  generateThumbnails: true,
-                  generateCanvas: true
-                });
-                setShowBundlePopup(false);
-                setTimeout(() => processPayment(), 100);
-              }}
-              className="w-full bg-green-600 hover:bg-green-700"
-            >
-              Yes, Bundle All Add-ons for {pricing && formatCredits(pricing.fullFeaturePack)} credits
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowBundlePopup(false);
-                setTimeout(() => processPayment(), 100);
-              }}
-              className="w-full"
-            >
-              No Thanks, Continue with Current Selection
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -341,10 +341,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       cutdown16x9: 99,
       cutdown9x16: 99,
-      spotifyCanvas: 499,
-      gifPack: 199,
-      thumbnailPack: 199,
-      fullFeaturePack: 499
+      spotifyCanvas: 599,    // $5.99 - premium Canvas feature
+      gifPack: 249,          // $2.49 - increased from $1.99
+      thumbnailPack: 249,    // $2.49 - increased from $1.99
+      fullFeaturePack: 699   // $6.99 - saves $3.98 (36% discount)
     });
   });
 
@@ -912,14 +912,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let totalAmount = 0;
 
-      // Base pricing (corrected pricing structure)
+      // Base pricing (value-based bundle structure)
       const pricing = {
-        cutdown16x9: 99,  // $0.99 per clip
-        cutdown9x16: 99,  // $0.99 per clip
-        gifPack: 199,     // $1.99 for 10 GIFs
-        thumbnailPack: 199, // $1.99 for 10 thumbnails
-        spotifyCanvas: 499, // $4.99 for 5 Canvas loops
-        fullFeaturePack: 499 // $4.99
+        cutdown16x9: 99,      // $0.99 per clip
+        cutdown9x16: 99,      // $0.99 per clip
+        gifPack: 249,         // $2.49 for 10 GIFs
+        thumbnailPack: 249,   // $2.49 for 10 thumbnails
+        spotifyCanvas: 599,   // $5.99 for 5 Canvas loops (premium feature)
+        fullFeaturePack: 699  // $6.99 (saves $3.98, 36% discount from $10.97)
       };
 
       // Calculate cutdown pricing
