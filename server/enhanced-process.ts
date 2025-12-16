@@ -20,6 +20,17 @@ function parseVideoDuration(duration: string): number {
   return 60; // Default 1 minute if parsing fails
 }
 
+// Helper function to strip timestamp and random ID prefix from filename
+// Removes patterns like "1765842074402-bhojbkgd8r4-" from "1765842074402-bhojbkgd8r4-video.mp4"
+function stripTimestampPrefix(filename: string): string {
+  // Match pattern: timestamp-randomid-actualname
+  const match = filename.match(/^\d+-[a-z0-9]+-(.+)$/);
+  if (match) {
+    return match[1]; // Return just the actual filename part
+  }
+  return filename; // Return as-is if no prefix found
+}
+
 // Helper function to generate clean filename from video metadata
 function generateCleanFilename(videoData: any): string {
   console.log('🏷️ Generating filename from metadata:', {
@@ -38,8 +49,9 @@ function generateCleanFilename(videoData: any): string {
     console.log('✅ Using videoTitle only:', videoData.videoTitle);
     return videoData.videoTitle;
   }
-  // Fallback to original filename without extension
-  const fallback = videoData.originalName?.replace(/\.[^/.]+$/, '') || 'Video';
+  // Fallback to original filename without extension, with timestamp prefix stripped
+  const originalWithoutExt = videoData.originalName?.replace(/\.[^/.]+$/, '') || 'Video';
+  const fallback = stripTimestampPrefix(originalWithoutExt);
   console.log('⚠️ Using fallback (originalName):', fallback);
   return fallback;
 }
@@ -638,7 +650,11 @@ class EnhancedProcessor {
         if (stats.isFile()) {
           // Read file and add to ZIP in memory (temporary files will be cleaned up)
           const fileBuffer = await fs.readFile(operation.outputPath);
-          const filename = path.basename(operation.outputPath);
+          const rawFilename = path.basename(operation.outputPath);
+
+          // Strip timestamp prefix from filename for user-facing download
+          // Backend R2 storage keeps the prefix for tracking, but ZIP files are clean
+          const cleanFilename = stripTimestampPrefix(rawFilename);
 
           // Use video metadata in folder names
           let folderName: string;
@@ -655,7 +671,7 @@ class EnhancedProcessor {
             folderName = operation.type;
           }
 
-          zip.addFile(`${folderName}/${filename}`, fileBuffer);
+          zip.addFile(`${folderName}/${cleanFilename}`, fileBuffer);
         }
       } catch (error) {
         console.warn(`⚠️ Could not add ${operation.outputPath} to ZIP:`, error);
