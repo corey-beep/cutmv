@@ -207,14 +207,27 @@ export class TimeoutManager {
   }
 }
 
-// Export commonly used functions
-export const {
-  calculateJobDeadline,
-  getTimeLeft,
-  getTimeLeftMinutes,
-  isDeadlineExceeded,
-  getStageTimeAllocation,
-  hasSufficientTimeForStage,
-  createCancellationToken,
-  logDeadlineInfo
-} = TimeoutManager;
+// Export commonly used functions with proper binding
+export const calculateJobDeadline = (...args: Parameters<typeof TimeoutManager.calculateJobDeadline>) =>
+  TimeoutManager.calculateJobDeadline(...args);
+
+export const getTimeLeft = (...args: Parameters<typeof TimeoutManager.getTimeLeft>) =>
+  TimeoutManager.getTimeLeft(...args);
+
+export const getTimeLeftMinutes = (...args: Parameters<typeof TimeoutManager.getTimeLeftMinutes>) =>
+  TimeoutManager.getTimeLeftMinutes(...args);
+
+export const isDeadlineExceeded = (...args: Parameters<typeof TimeoutManager.isDeadlineExceeded>) =>
+  TimeoutManager.isDeadlineExceeded(...args);
+
+export const getStageTimeAllocation = (...args: Parameters<typeof TimeoutManager.getStageTimeAllocation>) =>
+  TimeoutManager.getStageTimeAllocation(...args);
+
+export const hasSufficientTimeForStage = (...args: Parameters<typeof TimeoutManager.hasSufficientTimeForStage>) =>
+  TimeoutManager.hasSufficientTimeForStage(...args);
+
+export const createCancellationToken = (...args: Parameters<typeof TimeoutManager.createCancellationToken>) =>
+  TimeoutManager.createCancellationToken(...args);
+
+export const logDeadlineInfo = (...args: Parameters<typeof TimeoutManager.logDeadlineInfo>) =>
+  TimeoutManager.logDeadlineInfo(...args);
