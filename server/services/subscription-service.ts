@@ -29,25 +29,25 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'starter',
     name: 'Starter',
     priceId: process.env.STRIPE_STARTER_PRICE_ID || 'price_starter',
-    monthlyCredits: 10,
+    monthlyCredits: 1000, // $10 = 1000 credits conversion rate
     price: 999, // $9.99/month
-    description: '10 credits per month for basic video processing'
+    description: '1,000 credits per month for basic video processing - resets monthly'
   },
   {
     id: 'pro',
     name: 'Pro',
     priceId: process.env.STRIPE_PRO_PRICE_ID || 'price_pro',
-    monthlyCredits: 30,
+    monthlyCredits: 3000, // 3x starter plan
     price: 1999, // $19.99/month
-    description: '30 credits per month for professional use'
+    description: '3,000 credits per month for professional use - resets monthly'
   },
   {
     id: 'business',
     name: 'Business',
     priceId: process.env.STRIPE_BUSINESS_PRICE_ID || 'price_business',
-    monthlyCredits: 100,
+    monthlyCredits: 10000, // 10x starter plan
     price: 4999, // $49.99/month
-    description: '100 credits per month for business teams'
+    description: '10,000 credits per month for business teams - resets monthly'
   }
 ];
 
@@ -272,22 +272,28 @@ export class SubscriptionService {
         throw new Error('Invalid subscription metadata');
       }
 
-      // Update user's subscription ID in database
+      // Calculate next reset date (30 days from now)
+      const nextResetDate = new Date();
+      nextResetDate.setDate(nextResetDate.getDate() + 30);
+
+      // Update user's subscription ID, reset subscription credits, and set reset date
       await db
         .update(users)
         .set({
           stripeSubscriptionId: subscriptionId,
-          stripeCustomerId: customerId
+          stripeCustomerId: customerId,
+          subscriptionCredits: monthlyCredits, // Reset to plan amount monthly
+          subscriptionCreditResetDate: nextResetDate
         })
         .where(eq(users.id, userId));
 
-      // Grant monthly credits
+      // Log transaction for tracking
       const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId);
       const planName = plan?.name || 'Subscription';
 
       await creditService.grantSubscriptionCredits(userId, monthlyCredits, planName);
 
-      console.log(`✅ Granted ${monthlyCredits} credits to user ${userId} for subscription payment`);
+      console.log(`✅ Granted ${monthlyCredits} subscription credits to user ${userId} for ${planName} subscription (resets ${nextResetDate.toLocaleDateString()})`);
     } catch (error) {
       console.error('Error handling subscription payment success:', error);
       throw error;
@@ -308,13 +314,17 @@ export class SubscriptionService {
         .where(eq(users.stripeSubscriptionId, subscriptionId));
 
       if (user) {
-        // Clear subscription ID
+        // Clear subscription ID and subscription credits
         await db
           .update(users)
-          .set({ stripeSubscriptionId: null })
+          .set({
+            stripeSubscriptionId: null,
+            subscriptionCredits: 0,
+            subscriptionCreditResetDate: null
+          })
           .where(eq(users.id, user.id));
 
-        console.log(`✅ Cleared subscription for user ${user.id}`);
+        console.log(`✅ Cleared subscription and subscription credits for user ${user.id}`);
       }
     } catch (error) {
       console.error('Error handling subscription cancellation:', error);

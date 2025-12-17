@@ -89,7 +89,9 @@ export const users = pgTable("users", {
   onboardingCompleted: boolean("onboarding_completed").default(false), // Track if user completed onboarding
   referralCode: text("referral_code").unique(), // User's unique referral code
   referredBy: text("referred_by"), // Referral code of who referred this user
-  credits: integer("credits").default(0), // Available referral credits
+  credits: integer("credits").default(0), // Available purchased/referral credits (don't expire)
+  subscriptionCredits: integer("subscription_credits").default(0), // Monthly subscription credits (reset each billing cycle)
+  subscriptionCreditResetDate: timestamp("subscription_credit_reset_date"), // Next date when subscription credits reset
   referralCount: integer("referral_count").default(0), // Total successful referrals
   lastCreditGrantAt: timestamp("last_credit_grant_at"), // Rate limiting
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for billing
