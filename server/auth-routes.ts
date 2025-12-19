@@ -162,16 +162,21 @@ router.get('/verify', async (req, res) => {
     }
     
     res.cookie('cutmv-session', session.token, cookieOptions);
-    
+
     console.log('🍪 Session cookie set:', {
+      tokenPreview: session.token.substring(0, 8) + '...',
       secure: cookieOptions.secure,
       domain: cookieOptions.domain || 'browser-default (no explicit domain)',
       sameSite: cookieOptions.sameSite,
       maxAge: cookieOptions.maxAge,
+      httpOnly: cookieOptions.httpOnly,
       environment: process.env.NODE_ENV,
       deployment: !!process.env.REPLIT_DEPLOYMENT,
       host: req.get('host'),
-      isCanonicalDomain
+      isCanonicalDomain,
+      isRailwayDomain,
+      userAgent: req.get('user-agent'),
+      referer: req.get('referer')
     });
 
     // Redirect to app after successful login
@@ -266,14 +271,19 @@ router.post('/complete-onboarding', async (req, res) => {
 router.get('/me', async (req, res) => {
   try {
     const sessionToken = req.cookies['cutmv-session'];
-    
-    // Silent logging for debugging - no user-facing output
-    console.log('Auth check:', {
+
+    // Detailed logging for debugging magic link issues
+    console.log('🔍 Auth check on /api/auth/me:', {
       hasSession: !!sessionToken,
-      endpoint: '/api/auth/me'
+      tokenPreview: sessionToken ? sessionToken.substring(0, 8) + '...' : 'none',
+      allCookies: Object.keys(req.cookies),
+      host: req.get('host'),
+      origin: req.get('origin'),
+      referer: req.get('referer')
     });
-    
+
     if (!sessionToken) {
+      console.log('❌ No session cookie found - returning 401');
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
