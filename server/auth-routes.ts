@@ -129,26 +129,32 @@ router.get('/verify', async (req, res) => {
     console.log('✅ Magic link verified successfully for:', actualEmail);
     console.log('🔄 Setting up session and redirecting to dashboard...');
 
-    // Set session cookie with canonical domain strategy
+    // Set session cookie with flexible domain strategy
     const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT;
     const host = req.get('host') || '';
     const isCanonicalDomain = host === 'cutmv.fulldigitalll.com';
-    
+    const isRailwayDomain = host.includes('railway.app');
+
     const cookieOptions: any = {
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     };
-    
-    // Apply secure settings and domain scope for canonical domain
-    if (isProduction && isCanonicalDomain) {
-      cookieOptions.secure = true; // HTTPS required
-      cookieOptions.domain = '.fulldigitalll.com'; // Domain scope for subdomain sharing
-    } else if (isProduction && !isCanonicalDomain) {
-      // Production but non-canonical domain - should have been redirected
-      console.warn('⚠️ Setting cookie on non-canonical domain in production:', host);
-      cookieOptions.secure = true;
-      cookieOptions.domain = '.fulldigitalll.com';
+
+    // Apply secure settings based on environment
+    if (isProduction) {
+      cookieOptions.secure = true; // HTTPS required in production
+
+      // Only set domain for canonical domain to enable subdomain sharing
+      // For Railway domain, don't set domain so cookie works on that specific host
+      if (isCanonicalDomain) {
+        cookieOptions.domain = '.fulldigitalll.com'; // Domain scope for subdomain sharing
+      } else if (isRailwayDomain) {
+        // Railway domain - don't set domain, cookie will be host-specific
+        console.log('🍪 Setting cookie for Railway domain (host-specific):', host);
+      } else {
+        console.warn('⚠️ Unknown production domain:', host);
+      }
     } else {
       // Development settings - don't use secure or domain restrictions
       cookieOptions.secure = false;
