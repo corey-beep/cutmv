@@ -7,7 +7,7 @@
 import { randomBytes, createHash } from 'crypto';
 import { db } from './db';
 import { users, sessions, magicLinks, exports } from '@shared/schema';
-import { eq, and, gt, lt } from 'drizzle-orm';
+import { eq, and, gt, lt, sql } from 'drizzle-orm';
 import { Resend } from 'resend';
 import { urlSecurity } from './url-security.js';
 
@@ -47,8 +47,8 @@ export class AuthService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Check if user exists in PostgreSQL (case-insensitive search)
-        let [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+        // Check if user exists in PostgreSQL (case-insensitive search for backwards compatibility)
+        let [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${normalizedEmail}`);
 
         if (user) {
           console.log('✅ Found existing user:', normalizedEmail);
@@ -89,7 +89,7 @@ export class AuthService {
         // Check if this is a unique constraint violation on email (race condition)
         if (errorCode === '23505' && error?.constraint?.includes('email')) {
           console.log('⚠️ Email already exists (race condition), fetching existing user...');
-          const [existingUser] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+          const [existingUser] = await db.select().from(users).where(sql`lower(${users.email}) = ${normalizedEmail}`);
           if (existingUser) {
             return existingUser;
           }
@@ -287,14 +287,14 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         currentTime: new Date().toISOString()
       });
 
-      // Find valid magic link
+      // Find valid magic link (case-insensitive email match for backwards compatibility)
       const [magicLink] = await db
         .select()
         .from(magicLinks)
         .where(
           and(
             eq(magicLinks.token, hashedToken),
-            eq(magicLinks.email, normalizedEmail),
+            sql`lower(${magicLinks.email}) = ${normalizedEmail}`,
             eq(magicLinks.used, false),
             gt(magicLinks.expiresAt, new Date())
           )
@@ -308,11 +308,11 @@ This link and code will expire in 1 hour. If you didn't request this login link,
       });
 
       if (!magicLink) {
-        // Check if there are any magic links for this email to help debug
+        // Check if there are any magic links for this email to help debug (case-insensitive)
         const allLinksForEmail = await db
           .select()
           .from(magicLinks)
-          .where(eq(magicLinks.email, normalizedEmail))
+          .where(sql`lower(${magicLinks.email}) = ${normalizedEmail}`)
           .orderBy(magicLinks.createdAt);
 
         console.log('🔍 All magic links for email:', {
@@ -378,13 +378,13 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         currentTime: new Date().toISOString()
       });
 
-      // Find valid magic link with matching code
+      // Find valid magic link with matching code (case-insensitive email for backwards compatibility)
       const [magicLink] = await db
         .select()
         .from(magicLinks)
         .where(
           and(
-            eq(magicLinks.email, normalizedEmail),
+            sql`lower(${magicLinks.email}) = ${normalizedEmail}`,
             eq(magicLinks.verificationCode, code),
             eq(magicLinks.used, false),
             gt(magicLinks.expiresAt, new Date())
