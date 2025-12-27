@@ -42,32 +42,75 @@ export class AuthService {
 
   // Create or get user by email with Supabase integration
   async getOrCreateUser(email: string, referralCode?: string) {
-    try {
-      // Check if user exists in PostgreSQL
-      let [user] = await db.select().from(users).where(eq(users.email, email));
-      
-      if (!user) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const maxRetries = 3;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Check if user exists in PostgreSQL (case-insensitive search)
+        let [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+
+        if (user) {
+          console.log('✅ Found existing user:', normalizedEmail);
+          return user;
+        }
+
         // Generate unique referral code for new user
         const newReferralCode = this.generateReferralCode();
-        
+        console.log('📝 Creating new user:', { email: normalizedEmail, referralCode: newReferralCode, attempt });
+
         // Create new user in PostgreSQL with auto-generated referral code
         [user] = await db.insert(users).values({
-          email,
+          email: normalizedEmail,
           referralCode: newReferralCode,
           referredBy: referralCode // Track who referred this user
         }).returning();
+
+        console.log('✅ User created successfully:', normalizedEmail);
+        return user;
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        const errorCode = error?.code;
+
+        console.error(`❌ Error in getOrCreateUser (attempt ${attempt}/${maxRetries}):`, {
+          email: normalizedEmail,
+          errorMessage,
+          errorCode,
+          errorDetail: error?.detail,
+          errorConstraint: error?.constraint
+        });
+
+        // Check if this is a unique constraint violation on referralCode
+        if (errorCode === '23505' && error?.constraint?.includes('referral_code')) {
+          console.log('⚠️ Referral code collision, retrying with new code...');
+          continue; // Retry with a new referral code
+        }
+
+        // Check if this is a unique constraint violation on email (race condition)
+        if (errorCode === '23505' && error?.constraint?.includes('email')) {
+          console.log('⚠️ Email already exists (race condition), fetching existing user...');
+          const [existingUser] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+          if (existingUser) {
+            return existingUser;
+          }
+        }
+
+        // If this is the last attempt or an unrecoverable error, throw
+        if (attempt === maxRetries) {
+          throw new Error(`Failed to create user: ${errorMessage}`);
+        }
       }
-      
-      return user;
-    } catch (error) {
-      console.error('❌ Error in getOrCreateUser:', error);
-      throw new Error('Failed to create user');
     }
+
+    throw new Error('Failed to create user after maximum retries');
   }
 
   // Send magic link to user's email with referral support
   async sendMagicLink(email: string, callbackUrl: string = '/app', referralCode?: string) {
     try {
+      // Normalize email for consistent storage and lookup
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Generate magic link token and 6-digit verification code
       const token = this.generateToken();
       const hashedToken = this.hashToken(token);
@@ -76,7 +119,7 @@ export class AuthService {
 
       // Save magic link to database (store hashed token for security)
       await db.insert(magicLinks).values({
-        email,
+        email: normalizedEmail,
         token: hashedToken, // This should be the hashed version
         verificationCode, // Store plaintext code (will be used once)
         expiresAt,
@@ -115,10 +158,10 @@ export class AuthService {
       }
       
       // SECURITY: Use encrypted auth token to avoid exposing email in URL
-      const authToken = urlSecurity.generateSessionToken({ 
-        email, 
-        sessionId: token, 
-        videoName: callbackUrl 
+      const authToken = urlSecurity.generateSessionToken({
+        email: normalizedEmail,
+        sessionId: token,
+        videoName: callbackUrl
       });
       const magicLinkUrl = `${baseUrl}/api/auth/verify?auth=${authToken}`;
 
@@ -131,7 +174,7 @@ export class AuthService {
         sentInURL: 'raw version'
       });
       console.log('🔍 Auth flow:', {
-        email,
+        email: normalizedEmail,
         domain: baseUrl,
         process: 'Magic link → Authentication → Dashboard'
       });
@@ -233,15 +276,17 @@ This link and code will expire in 1 hour. If you didn't request this login link,
   // Verify magic link and create session
   async verifyMagicLink(token: string, email: string) {
     try {
+      // Normalize email for consistent lookup
+      const normalizedEmail = email.toLowerCase().trim();
       const hashedToken = this.hashToken(token);
-      
+
       console.log('🔍 Verifying magic link:', {
-        email,
+        email: normalizedEmail,
         rawToken: token.substring(0, 16) + '...',
         tokenHash: hashedToken.substring(0, 16) + '...',
         currentTime: new Date().toISOString()
       });
-      
+
       // Find valid magic link
       const [magicLink] = await db
         .select()
@@ -249,7 +294,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         .where(
           and(
             eq(magicLinks.token, hashedToken),
-            eq(magicLinks.email, email),
+            eq(magicLinks.email, normalizedEmail),
             eq(magicLinks.used, false),
             gt(magicLinks.expiresAt, new Date())
           )
@@ -257,7 +302,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
 
       console.log('🔍 Magic link lookup result:', {
         found: !!magicLink,
-        email,
+        email: normalizedEmail,
         expired: magicLink ? magicLink.expiresAt < new Date() : 'N/A',
         used: magicLink?.used
       });
@@ -267,11 +312,11 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         const allLinksForEmail = await db
           .select()
           .from(magicLinks)
-          .where(eq(magicLinks.email, email))
+          .where(eq(magicLinks.email, normalizedEmail))
           .orderBy(magicLinks.createdAt);
-          
+
         console.log('🔍 All magic links for email:', {
-          email,
+          email: normalizedEmail,
           count: allLinksForEmail.length,
           recent: allLinksForEmail.slice(-3).map(link => ({
             tokenPreview: link.token.substring(0, 16) + '...',
@@ -282,7 +327,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
           })),
           searchingForHash: hashedToken.substring(0, 16) + '...'
         });
-        
+
         throw new Error('Invalid or expired magic link');
       }
 
@@ -293,7 +338,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         .where(eq(magicLinks.id, magicLink.id));
 
       // Get or create user (no referral code in magic link verification)
-      const user = await this.getOrCreateUser(email);
+      const user = await this.getOrCreateUser(normalizedEmail);
 
       // Update last login
       await db
@@ -324,8 +369,11 @@ This link and code will expire in 1 hour. If you didn't request this login link,
   // Verify 6-digit code and create session
   async verifyCode(email: string, code: string) {
     try {
+      // Normalize email for consistent lookup
+      const normalizedEmail = email.toLowerCase().trim();
+
       console.log('🔍 Verifying 6-digit code:', {
-        email,
+        email: normalizedEmail,
         code: code.substring(0, 3) + '...',
         currentTime: new Date().toISOString()
       });
@@ -336,7 +384,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         .from(magicLinks)
         .where(
           and(
-            eq(magicLinks.email, email),
+            eq(magicLinks.email, normalizedEmail),
             eq(magicLinks.verificationCode, code),
             eq(magicLinks.used, false),
             gt(magicLinks.expiresAt, new Date())
@@ -345,7 +393,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
 
       console.log('🔍 Code verification result:', {
         found: !!magicLink,
-        email,
+        email: normalizedEmail,
         expired: magicLink ? magicLink.expiresAt < new Date() : 'N/A',
         used: magicLink?.used
       });
@@ -361,7 +409,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         .where(eq(magicLinks.id, magicLink.id));
 
       // Get or create user
-      const user = await this.getOrCreateUser(email);
+      const user = await this.getOrCreateUser(normalizedEmail);
 
       // Update last login
       await db
@@ -382,7 +430,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         })
         .returning();
 
-      console.log('✅ 6-digit code verified successfully for:', email);
+      console.log('✅ 6-digit code verified successfully for:', normalizedEmail);
       return { user, session };
     } catch (error) {
       console.error('❌ Error verifying code:', error);
