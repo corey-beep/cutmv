@@ -27,7 +27,7 @@ initializeSentry();
 const app = express();
 
 // Version identifier for Railway deployment verification
-console.log('🚀 CUTMV v3 - Build: 2025-12-13-01:35-FINAL');
+console.log('🚀 CUTMV v3 - Build: 2025-12-26-02:10-AUTH-FIX');
 console.log('📍 Environment:', process.env.NODE_ENV);
 console.log('🌐 Railway Deploy:', process.env.RAILWAY_ENVIRONMENT_NAME || 'Not Railway');
 
