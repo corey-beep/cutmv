@@ -537,6 +537,27 @@ This link and code will expire in 1 hour. If you didn't request this login link,
     }
   }
 
+  // Update user with arbitrary fields
+  async updateUser(userId: string, updates: Partial<{
+    stripeCustomerId: string;
+    stripeSubscriptionId: string;
+    credits: number;
+    subscriptionCredits: number;
+    subscriptionCreditResetDate: Date;
+  }>) {
+    try {
+      const [updatedUser] = await db.update(users)
+        .set(updates)
+        .where(eq(users.id, userId))
+        .returning();
+
+      return updatedUser;
+    } catch (error) {
+      console.error('❌ Error updating user:', error);
+      throw new Error('Failed to update user');
+    }
+  }
+
   // Complete user onboarding
   async completeOnboarding(userId: string, name: string, marketingConsent: boolean) {
     try {

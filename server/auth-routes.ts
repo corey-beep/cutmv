@@ -8,6 +8,12 @@ import { Router } from 'express';
 import { authService } from './auth-service';
 import { insertUserSchema } from '@shared/schema';
 import { z } from 'zod';
+import Stripe from 'stripe';
+
+// Initialize Stripe
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-07-30.basil' })
+  : null;
 
 const router = Router();
 
@@ -389,6 +395,63 @@ router.get('/billing/info', async (req, res) => {
   } catch (error) {
     console.error('Billing info error:', error);
     res.status(500).json({ error: 'Failed to fetch billing information' });
+  }
+});
+
+// Create Setup Intent for adding a payment method
+router.post('/billing/setup-intent', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Payment processing is not configured' });
+    }
+
+    const sessionToken = req.cookies['cutmv-session'];
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const auth = await authService.verifySession(sessionToken);
+    if (!auth) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const { user } = auth;
+
+    // Get or create Stripe customer
+    let customerId = user.stripeCustomerId;
+
+    if (!customerId) {
+      // Create a new Stripe customer
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: {
+          userId: user.id,
+        },
+      });
+      customerId = customer.id;
+
+      // Save the customer ID to the user
+      await authService.updateUser(user.id, { stripeCustomerId: customerId });
+    }
+
+    // Create a Setup Intent
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      metadata: {
+        userId: user.id,
+      },
+    });
+
+    console.log(`✅ Created setup intent for user ${user.email}: ${setupIntent.id}`);
+
+    res.json({
+      clientSecret: setupIntent.client_secret,
+    });
+  } catch (error) {
+    console.error('Setup intent error:', error);
+    res.status(500).json({ error: 'Failed to create setup intent' });
   }
 });
 
