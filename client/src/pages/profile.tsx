@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, CreditCard, Settings, Save, Eye, EyeOff, Trash2, Shield, Copy, Users, Gift } from "lucide-react";
+import { User, CreditCard, Settings, Save, Eye, EyeOff, Trash2, Shield, Copy, Users, Gift, Sparkles, Crown, Zap, ExternalLink } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,11 +33,26 @@ interface PaymentMethodInfo {
   };
 }
 
+interface SubscriptionStatus {
+  hasActiveSubscription: boolean;
+  subscriptionId?: string;
+  status?: string;
+  currentPeriodEnd?: string;
+  plan?: {
+    id: string;
+    name: string;
+    monthlyCredits: number;
+    price: number;
+  };
+  cancelAtPeriodEnd?: boolean;
+}
+
 export default function ProfilePage() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [paymentMethodInfo, setPaymentMethodInfo] = useState<PaymentMethodInfo | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -65,6 +80,7 @@ export default function ProfilePage() {
       setEmail(user.email || "");
       setMarketingConsent(user.marketingConsent || false);
       fetchPaymentMethodInfo();
+      fetchSubscriptionStatus();
     }
   }, [user]);
 
@@ -97,7 +113,7 @@ export default function ProfilePage() {
     try {
       const response = await apiRequest("GET", "/api/billing/payment-methods");
       const data = await response.json();
-      
+
       // Format the payment method info for pay-per-use model
       if (data.paymentMethods && data.paymentMethods.length > 0) {
         const paymentMethod = data.paymentMethods[0]; // Use first payment method
@@ -115,6 +131,23 @@ export default function ProfilePage() {
     } catch (error) {
       console.error("Failed to fetch payment method info:", error);
       setPaymentMethodInfo(null);
+    }
+  };
+
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const response = await fetch('/api/subscription/status', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSubscriptionStatus(data);
+      } else {
+        setSubscriptionStatus({ hasActiveSubscription: false });
+      }
+    } catch (error) {
+      console.error("Failed to fetch subscription status:", error);
+      setSubscriptionStatus({ hasActiveSubscription: false });
     }
   };
 
@@ -442,11 +475,90 @@ export default function ProfilePage() {
           </TabsContent>
 
           <TabsContent value="payment" className="space-y-6">
+            {/* Subscription Status Card */}
             <Card>
               <CardHeader>
-                <CardTitle>Payment Information</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-brand-green" />
+                  Subscription
+                </CardTitle>
                 <CardDescription>
-                  Manage your stored payment method for pay-per-use video processing
+                  Manage your CUTMV subscription and save 50% on all processing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {subscriptionStatus?.hasActiveSubscription ? (
+                  <div className="space-y-4">
+                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                      <div className="flex items-center gap-3 mb-3">
+                        {subscriptionStatus.plan?.id === 'enterprise' ? (
+                          <Crown className="w-6 h-6 text-yellow-500" />
+                        ) : subscriptionStatus.plan?.id === 'pro' ? (
+                          <Sparkles className="w-6 h-6 text-brand-green" />
+                        ) : (
+                          <Zap className="w-6 h-6 text-blue-500" />
+                        )}
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {subscriptionStatus.plan?.name} Plan
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            ${subscriptionStatus.plan?.price}/month • {subscriptionStatus.plan?.monthlyCredits?.toLocaleString()} credits/month
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-gray-600 space-y-1">
+                        {subscriptionStatus.cancelAtPeriodEnd ? (
+                          <p className="text-orange-600 font-medium">
+                            Cancels on {subscriptionStatus.currentPeriodEnd ? new Date(subscriptionStatus.currentPeriodEnd).toLocaleDateString() : 'N/A'}
+                          </p>
+                        ) : (
+                          <p>
+                            Renews: {subscriptionStatus.currentPeriodEnd ? new Date(subscriptionStatus.currentPeriodEnd).toLocaleDateString() : 'N/A'}
+                          </p>
+                        )}
+                        <p className="text-green-600 font-medium">
+                          50% off all video processing
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => window.location.href = '/app/subscription'}
+                      className="w-full"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Manage Subscription
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <Sparkles className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="font-medium text-gray-900 mb-2">No Active Subscription</h4>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Subscribe to save 50% on all video processing and get monthly credits
+                    </p>
+                    <Button
+                      className="text-black"
+                      style={{ backgroundColor: 'hsl(85, 70%, 55%)' }}
+                      onClick={() => window.location.href = '/app/subscription'}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      View Subscription Plans
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payment Method Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Method</CardTitle>
+                <CardDescription>
+                  Manage your stored payment method for subscriptions and purchases
                 </CardDescription>
               </CardHeader>
               <CardContent>

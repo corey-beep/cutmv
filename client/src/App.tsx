@@ -22,6 +22,7 @@ import ReferralPage from "@/pages/ReferralPage";
 
 import ProfilePage from "@/pages/profile";
 import AddPaymentMethodPage from "@/pages/add-payment-method";
+import SubscriptionPage from "@/pages/subscription";
 
 import ReferralsPage from "@/pages/referrals";
 import LegalPage from "@/pages/legal";
@@ -54,6 +55,8 @@ function Router() {
         <Route path="/profile" component={ProfilePage} />
         <Route path="/app/profile" component={ProfilePage} />
         <Route path="/app/add-payment-method" component={AddPaymentMethodPage} />
+        <Route path="/app/subscription" component={SubscriptionPage} />
+        <Route path="/app/subscription/success" component={SubscriptionPage} />
 
         <Route path="/app/referrals" component={ReferralsPage} />
         <Route path="/app/legal" component={LegalPage} />

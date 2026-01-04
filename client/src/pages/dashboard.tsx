@@ -407,7 +407,10 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card
+                className="cursor-pointer hover:border-brand-green transition-colors"
+                onClick={() => window.location.href = '/app/subscription'}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Subscription</CardTitle>
                   <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -430,7 +433,10 @@ export default function DashboardPage() {
                       <Button
                         size="sm"
                         className="mt-2 bg-brand-green hover:bg-brand-green-light text-brand-black text-xs"
-                        onClick={() => window.location.href = '/profile?tab=subscription'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = '/app/subscription';
+                        }}
                       >
                         Subscribe & Save 50%
                       </Button>

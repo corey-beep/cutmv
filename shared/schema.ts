@@ -96,6 +96,8 @@ export const users = pgTable("users", {
   lastCreditGrantAt: timestamp("last_credit_grant_at"), // Rate limiting
   stripeCustomerId: text("stripe_customer_id"), // Stripe customer ID for billing
   stripeSubscriptionId: text("stripe_subscription_id"), // Active Stripe subscription ID
+  paymentFailedCount: integer("payment_failed_count").default(0), // Consecutive failed payment attempts
+  lastPaymentFailedAt: timestamp("last_payment_failed_at"), // Timestamp of last failed payment
   createdAt: timestamp("created_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });

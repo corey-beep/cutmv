@@ -39,6 +39,14 @@ interface FailureNotificationOptions {
   sessionId: string;
 }
 
+export interface PaymentFailedOptions {
+  userEmail: string;
+  userName?: string;
+  planName: string;
+  daysRemaining: number;
+  updatePaymentUrl: string;
+}
+
 export interface WelcomeEmailOptions {
   userEmail: string;
   firstName?: string;
@@ -752,6 +760,173 @@ Made with ❤️ by Full Digital
     `;
 
     return { subject, html, text };
+  }
+
+  // Generate HTML template for payment failed notification
+  private generatePaymentFailedTemplate(options: PaymentFailedOptions): EmailTemplate {
+    const { userName = 'there', planName, daysRemaining, updatePaymentUrl } = options;
+
+    const urgencyLevel = daysRemaining <= 2 ? 'critical' : daysRemaining <= 3 ? 'warning' : 'notice';
+    const urgencyColor = urgencyLevel === 'critical' ? '#dc2626' : urgencyLevel === 'warning' ? '#f59e0b' : '#3b82f6';
+    const urgencyBg = urgencyLevel === 'critical' ? '#fef2f2' : urgencyLevel === 'warning' ? '#fffbeb' : '#eff6ff';
+    const urgencyBorder = urgencyLevel === 'critical' ? '#fecaca' : urgencyLevel === 'warning' ? '#fde68a' : '#bfdbfe';
+
+    const subject = daysRemaining === 1
+      ? `⚠️ Final Notice: Your CUTMV subscription will be paused tomorrow`
+      : `Action Required: Update your payment method - ${daysRemaining} days remaining`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Payment Failed - CUTMV</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px; background: #ffffff;">
+            <!-- Header -->
+            <div style="text-align: center; margin-bottom: 30px; padding: 20px 0; border-bottom: 2px solid #8cc63f;">
+              <table style="margin: 0 auto 8px auto; border: 0; border-spacing: 0;">
+                <tr>
+                  <td style="vertical-align: middle; padding-right: 12px;">
+                    <svg width="28" height="28" viewBox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                    <g id="#94f33fff">
+                    <path fill="#94f33f" opacity="1.00" d=" M 71.13 0.00 L 128.25 0.00 C 128.25 19.04 128.25 38.08 128.25 57.13 C 109.21 57.12 90.17 57.12 71.13 57.13 C 71.13 38.09 71.13 19.04 71.13 0.00 Z" />
+                    <path fill="#94f33f" opacity="1.00" d=" M 142.25 0.00 L 199.38 0.00 C 199.37 19.04 199.38 38.08 199.37 57.12 C 180.33 57.10 161.29 57.16 142.25 57.09 C 142.25 38.06 142.26 19.03 142.25 0.00 Z" />
+                    <path fill="#94f33f" opacity="1.00" d=" M 0.00 71.13 C 19.04 71.13 38.09 71.12 57.13 71.13 C 57.11 90.17 57.15 109.21 57.11 128.24 C 38.07 128.25 19.04 128.25 0.00 128.24 L 0.00 71.13 Z" />
+                    <path fill="#94f33f" opacity="1.00" d=" M 71.13 71.13 C 90.16 71.12 109.19 71.13 128.22 71.13 C 128.28 90.17 128.23 109.21 128.25 128.24 C 109.21 128.27 90.17 128.22 71.13 128.27 C 71.13 109.22 71.12 90.18 71.13 71.13 Z" />
+                    <path fill="#94f33f" opacity="1.00" d=" M 142.23 71.12 C 161.28 71.14 180.32 71.12 199.36 71.13 C 199.39 90.16 199.38 109.20 199.37 128.23 C 180.33 128.27 161.29 128.24 142.25 128.25 C 142.24 109.20 142.28 90.16 142.23 71.12 Z" />
+                    <path fill="#94f33f" opacity="1.00" d=" M 71.14 142.27 C 90.18 142.24 109.21 142.26 128.25 142.26 C 128.26 161.30 128.23 180.34 128.26 199.38 C 109.22 199.36 90.17 199.39 71.13 199.36 C 71.13 180.33 71.11 161.30 71.14 142.27 Z" />
+                    </g>
+                    <g id="#ffffffff">
+                    <path fill="#ffffff" opacity="1.00" d=" M 0.00 142.25 C 19.05 142.25 38.10 142.25 57.14 142.25 C 57.10 161.29 57.13 180.33 57.13 199.38 C 38.09 199.37 19.04 199.38 0.00 199.37 L 0.00 142.25 Z" />
+                    </g>
+                    </svg>
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <h1 style="margin: 0; color: #8cc63f; font-size: 28px; font-weight: 700; line-height: 1;">CUTMV</h1>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0; color: #666; font-size: 14px;">AI-Powered Video Creation Platform</p>
+            </div>
+
+            <!-- Payment Failed Alert -->
+            <div style="background: ${urgencyBg}; padding: 30px; border-radius: 12px; margin-bottom: 20px; border: 1px solid ${urgencyBorder};">
+              <h2 style="margin: 0 0 16px 0; color: ${urgencyColor}; font-size: 24px; text-align: center;">
+                ${daysRemaining === 1 ? '⚠️ Final Notice' : '💳 Payment Update Needed'}
+              </h2>
+
+              <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px;">
+                Hi ${userName},
+              </p>
+
+              <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px;">
+                We couldn't process your payment for your <strong>${planName}</strong> subscription.
+                ${daysRemaining === 1
+                  ? 'This is your final reminder - your subscription will be paused <strong>tomorrow</strong> if we can\'t process payment.'
+                  : `You have <strong>${daysRemaining} days</strong> to update your payment method before your subscription is paused.`
+                }
+              </p>
+
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${urgencyColor};">
+                <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                  <strong>What happens if payment fails?</strong><br>
+                  • You'll lose your 50% subscriber discount<br>
+                  • Your monthly credits will not be renewed<br>
+                  • You can re-subscribe anytime to restore benefits
+                </p>
+              </div>
+
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${updatePaymentUrl}" style="display: inline-block; background: #8cc63f; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 18px; box-shadow: 0 4px 6px rgba(140, 198, 63, 0.3);">Update Payment Method</a>
+              </div>
+
+              <p style="margin: 0; text-align: center; color: #6b7280; font-size: 14px;">
+                ${daysRemaining > 1 ? `We'll send you a reminder each day for the next ${daysRemaining - 1} days.` : 'This is your last reminder.'}
+              </p>
+            </div>
+
+            <!-- Support -->
+            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+              <p style="margin: 0 0 8px 0; color: #374151; font-weight: 600;">Need Help?</p>
+              <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                If you're having issues with payment, contact us at <a href="mailto:staff@fulldigitalll.com" style="color: #8cc63f;">staff@fulldigitalll.com</a>
+              </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">
+              <p style="margin: 0 0 8px 0;">Made with ❤️ by <strong>Full Digital</strong></p>
+              <p style="margin: 0;">Questions? Contact us at <a href="mailto:staff@fulldigitalll.com" style="color: #8cc63f;">staff@fulldigitalll.com</a></p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const text = `
+CUTMV - Payment Update Needed
+
+Hi ${userName},
+
+We couldn't process your payment for your ${planName} subscription.
+${daysRemaining === 1
+  ? 'This is your final reminder - your subscription will be paused tomorrow if we can\'t process payment.'
+  : `You have ${daysRemaining} days to update your payment method before your subscription is paused.`
+}
+
+What happens if payment fails?
+• You'll lose your 50% subscriber discount
+• Your monthly credits will not be renewed
+• You can re-subscribe anytime to restore benefits
+
+Update your payment method: ${updatePaymentUrl}
+
+${daysRemaining > 1 ? `We'll send you a reminder each day for the next ${daysRemaining - 1} days.` : 'This is your last reminder.'}
+
+Need Help? Contact us at staff@fulldigitalll.com
+
+Made with ❤️ by Full Digital
+    `;
+
+    return { subject, html, text };
+  }
+
+  // Send payment failed notification
+  async sendPaymentFailedNotification(options: PaymentFailedOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      const template = this.generatePaymentFailedTemplate(options);
+
+      const response = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: options.userEmail,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
+      });
+
+      if (response.data?.id) {
+        console.log(`📧 Payment failed notification sent to ${options.userEmail} (${options.daysRemaining} days remaining)`);
+        return {
+          success: true,
+          messageId: response.data.id
+        };
+      } else {
+        console.error('Failed to send payment failed notification:', response.error);
+        return {
+          success: false,
+          error: response.error?.message || 'Failed to send email'
+        };
+      }
+    } catch (error) {
+      console.error('Error sending payment failed notification:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 }
 
