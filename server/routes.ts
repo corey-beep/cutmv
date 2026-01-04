@@ -1338,6 +1338,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Billing: Get user's saved payment methods
+  app.get('/api/billing/payment-methods', requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.json({ paymentMethods: [] });
+      }
+
+      const user = req.user;
+      if (!user?.stripeCustomerId) {
+        return res.json({ paymentMethods: [] });
+      }
+
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: user.stripeCustomerId,
+        type: 'card',
+      });
+
+      const formattedMethods = paymentMethods.data.map(pm => ({
+        id: pm.id,
+        brand: pm.card?.brand || 'unknown',
+        last4: pm.card?.last4 || '****',
+        expMonth: pm.card?.exp_month || 0,
+        expYear: pm.card?.exp_year || 0,
+      }));
+
+      res.json({ paymentMethods: formattedMethods });
+    } catch (error) {
+      console.error('Error fetching payment methods:', error);
+      res.status(500).json({ error: 'Failed to fetch payment methods' });
+    }
+  });
+
+  // Billing: Create Setup Intent for adding a payment method
+  app.post('/api/billing/setup-intent', requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Payment processing is not configured' });
+      }
+
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      // Get or create Stripe customer
+      let customerId = user.stripeCustomerId;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id;
+
+        // Save the customer ID to the user
+        await authService.updateUser(user.id, { stripeCustomerId: customerId });
+      }
+
+      // Create a Setup Intent
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        metadata: { userId: user.id },
+      });
+
+      console.log(`✅ Created setup intent for user ${user.email}: ${setupIntent.id}`);
+
+      res.json({ clientSecret: setupIntent.client_secret });
+    } catch (error) {
+      console.error('Setup intent error:', error);
+      res.status(500).json({ error: 'Failed to create setup intent' });
+    }
+  });
+
   // Secure download endpoint with tokens - redirects to R2 URLs  
   app.get('/api/secure-download/:token', async (req, res) => {
     try {
