@@ -170,12 +170,47 @@ export class SubscriptionService {
         .from(users)
         .where(eq(users.id, userId));
 
-      if (!user?.stripeSubscriptionId) {
+      let subscriptionId = user?.stripeSubscriptionId;
+
+      // If no subscription ID stored but user has customer ID, check Stripe directly
+      // This handles cases where webhook hasn't processed yet
+      if (!subscriptionId && user?.stripeCustomerId) {
+        console.log(`🔍 No stored subscription for user ${userId}, checking Stripe customer ${user.stripeCustomerId}`);
+
+        const subscriptions = await stripe.subscriptions.list({
+          customer: user.stripeCustomerId,
+          status: 'active',
+          limit: 1
+        });
+
+        if (subscriptions.data.length > 0) {
+          const activeSubscription = subscriptions.data[0];
+          subscriptionId = activeSubscription.id;
+
+          // Update the user's record with the subscription ID
+          console.log(`✅ Found active subscription ${subscriptionId}, updating user record`);
+
+          const priceId = activeSubscription.items?.data?.[0]?.price?.id;
+          const plan = SUBSCRIPTION_PLANS.find(p => p.priceId === priceId);
+
+          const periodEnd = (activeSubscription as any).current_period_end;
+          await db
+            .update(users)
+            .set({
+              stripeSubscriptionId: subscriptionId,
+              subscriptionCredits: plan?.monthlyCredits || 0,
+              subscriptionCreditResetDate: periodEnd ? new Date(periodEnd * 1000) : null
+            })
+            .where(eq(users.id, userId));
+        }
+      }
+
+      if (!subscriptionId) {
         return { hasActiveSubscription: false };
       }
 
       // Get subscription from Stripe
-      const subscriptionResponse = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      const subscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId);
       const subscription = subscriptionResponse as any; // Type assertion for compatibility
 
       const isActive = subscription.status === 'active' || subscription.status === 'trialing';
@@ -187,7 +222,7 @@ export class SubscriptionService {
       return {
         hasActiveSubscription: isActive,
         subscriptionId: subscription.id,
-        customerId: user.stripeCustomerId || undefined,
+        customerId: user?.stripeCustomerId || undefined,
         status: subscription.status,
         currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : undefined,
         plan,
