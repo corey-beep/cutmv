@@ -398,6 +398,51 @@ router.get('/billing/info', async (req, res) => {
   }
 });
 
+// Get user's saved payment methods
+router.get('/billing/payment-methods', async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.json({ paymentMethods: [] });
+    }
+
+    const sessionToken = req.cookies['cutmv-session'];
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const auth = await authService.verifySession(sessionToken);
+    if (!auth) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const { user } = auth;
+
+    if (!user.stripeCustomerId) {
+      return res.json({ paymentMethods: [] });
+    }
+
+    // Fetch payment methods from Stripe
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: 'card',
+    });
+
+    const formattedMethods = paymentMethods.data.map(pm => ({
+      id: pm.id,
+      brand: pm.card?.brand || 'unknown',
+      last4: pm.card?.last4 || '****',
+      expMonth: pm.card?.exp_month || 0,
+      expYear: pm.card?.exp_year || 0,
+    }));
+
+    res.json({ paymentMethods: formattedMethods });
+  } catch (error) {
+    console.error('Error fetching payment methods:', error);
+    res.status(500).json({ error: 'Failed to fetch payment methods' });
+  }
+});
+
 // Create Setup Intent for adding a payment method
 router.post('/billing/setup-intent', async (req, res) => {
   try {
