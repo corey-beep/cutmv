@@ -60,7 +60,23 @@ interface PricingData {
   gifPack: number;
   thumbnailPack: number;
   fullFeaturePack: number;
-  // Professional service only - no watermark options
+  // Subscriber-aware pricing
+  cutdown: number;
+  canvasPack: number;
+  isSubscriber: boolean;
+  subscriberDiscount: number;
+  subscriberRates: {
+    cutdown: number;
+    gifPack: number;
+    thumbnailPack: number;
+    canvasPack: number;
+  };
+  nonSubscriberRates: {
+    cutdown: number;
+    gifPack: number;
+    thumbnailPack: number;
+    canvasPack: number;
+  };
 }
 
 export default function PricingCalculator({ onPaymentRequired, onFreeSessionCreated, defaultConfig, videoMetadata, onVideoUpload, uploadedVideo, onTimestampTextChange, generateCutdowns, setGenerateCutdowns, onTimestampsGenerated, onRegisterGenerateFunction }: PricingCalculatorProps) {
@@ -141,6 +157,11 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
   const [showPromoInput, setShowPromoInput] = useState(false);
   const [promoValidation, setPromoValidation] = useState<any>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+
+  // Subscriber-aware pricing state
+  const [isSubscriber, setIsSubscriber] = useState(false);
+  const [subscriberCost, setSubscriberCost] = useState(0);
+  const [potentialSavings, setPotentialSavings] = useState(0);
   const { toast } = useToast();
   const { sendWelcomeEmail } = useEmailDelivery();
   const { verifyEmail, isVerifying: isVerifyingEmail, lastResult: emailVerificationResult } = useEmailVerification();
@@ -272,12 +293,17 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
         const data = await response.json();
         
         console.log('💰 Price calculation response:', data);
-        
+
         // Handle new response format with discount info
         setTotalAmount(data.totalAmount || 0);
         setOriginalAmount((data.totalAmount || 0) + (data.discountApplied || 0));
         setDiscountApplied(data.discountApplied || 0);
         setPromoValidation(data.promoValidation || null);
+
+        // Handle subscriber-aware pricing info
+        setIsSubscriber(data.isSubscriber || false);
+        setSubscriberCost(data.subscriberCost || 0);
+        setPotentialSavings(data.potentialSavings || 0);
         
         // CRITICAL: Re-validate timestamps after promo code application
         if (discountCode.trim() && config.timestampText.trim()) {
@@ -1416,16 +1442,49 @@ export default function PricingCalculator({ onPaymentRequired, onFreeSessionCrea
             </div>
           )}
 
+          {/* Subscription upsell for non-subscribers */}
+          {hasAnyFeature && !isSubscriber && potentialSavings > 0 && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-brand-green/10 to-green-50 border border-brand-green/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-brand-green">Save 50% with a Subscription!</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Subscribers pay only <span className="font-bold">{formatCredits(subscriberCost)} credits</span> for this export
+                    <span className="text-brand-green ml-1">(saving {formatCredits(potentialSavings)} credits)</span>
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-brand-green text-brand-green hover:bg-brand-green hover:text-white"
+                  onClick={() => window.location.href = '/dashboard?tab=subscription'}
+                >
+                  Subscribe
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Subscriber badge */}
+          {hasAnyFeature && isSubscriber && (
+            <div className="mt-4 p-3 bg-brand-green/10 border border-brand-green/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-brand-green text-white">Subscriber</Badge>
+                <span className="text-sm text-brand-green font-medium">You're saving 50% on this export!</span>
+              </div>
+            </div>
+          )}
+
           {hasAnyFeature && (
-            <Button 
+            <Button
               onClick={handlePayment}
               disabled={
-                isCreatingCheckout || 
+                isCreatingCheckout ||
                 !hasAnyFeature ||
                 !config.userEmail?.trim() ||
                 (totalAmount === 0 && discountApplied === 0)
               }
-              className="w-full mt-6"
+              className="w-full mt-4"
               size="lg"
             >
               <CreditCard className="w-4 h-4 mr-2" />

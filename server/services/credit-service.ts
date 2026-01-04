@@ -8,6 +8,19 @@ import { db } from '../db';
 import { users } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 
+// Credit costs - SUBSCRIBER rates (non-subscribers pay 2×)
+// Based on CUTMV Pricing & Monetization Strategy v2
+export const CREDIT_COSTS = {
+  // Subscriber rates
+  CUTDOWN: 50,           // 50 credits per cutdown (was 99)
+  GIF_PACK: 90,          // 90 credits for GIF pack (was 199)
+  THUMBNAIL_PACK: 90,    // 90 credits for thumbnail pack (was 199)
+  CANVAS_PACK: 225,      // 225 credits for Spotify Canvas pack (was 499)
+
+  // Non-subscriber multiplier
+  NON_SUBSCRIBER_MULTIPLIER: 2
+} as const;
+
 export interface CreditTransaction {
   id: number;
   userId: string;
@@ -266,40 +279,105 @@ export class CreditService {
   }
 
   /**
-   * Calculate credit cost for video processing options
+   * Check if user has an active subscription
    */
-  calculateProcessingCost(options: {
+  async isActiveSubscriber(userId: string): Promise<boolean> {
+    try {
+      const [user] = await db
+        .select({ stripeSubscriptionId: users.stripeSubscriptionId })
+        .from(users)
+        .where(eq(users.id, userId));
+
+      if (!user?.stripeSubscriptionId) {
+        return false;
+      }
+
+      // Import dynamically to avoid circular dependency
+      const { subscriptionService } = await import('./subscription-service');
+      const status = await subscriptionService.getSubscriptionStatus(userId);
+      return status.hasActiveSubscription;
+    } catch (error) {
+      console.error('Error checking subscriber status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Calculate credit cost for video processing options
+   * Subscribers get 50% off (pay base rate), non-subscribers pay 2×
+   */
+  async calculateProcessingCost(
+    userId: string | null,
+    options: {
+      timestampCount: number;
+      aspectRatios: string[];
+      generateGif: boolean;
+      generateThumbnails: boolean;
+      generateCanvas: boolean;
+    }
+  ): Promise<{ cost: number; isSubscriber: boolean; savings: number; subscriberCost: number }> {
+    // Check subscription status
+    const isSubscriber = userId ? await this.isActiveSubscriber(userId) : false;
+    const multiplier = isSubscriber ? 1 : CREDIT_COSTS.NON_SUBSCRIBER_MULTIPLIER;
+
+    let baseCredits = 0;
+
+    // Cutdowns: base 50 credits per cutdown
+    if (options.timestampCount > 0 && options.aspectRatios.length > 0) {
+      const cutdownsCount = options.timestampCount * options.aspectRatios.length;
+      baseCredits += cutdownsCount * CREDIT_COSTS.CUTDOWN;
+    }
+
+    // Export options
+    if (options.generateGif) {
+      baseCredits += CREDIT_COSTS.GIF_PACK;
+    }
+    if (options.generateThumbnails) {
+      baseCredits += CREDIT_COSTS.THUMBNAIL_PACK;
+    }
+    if (options.generateCanvas) {
+      baseCredits += CREDIT_COSTS.CANVAS_PACK;
+    }
+
+    const cost = baseCredits * multiplier;
+    const subscriberCost = baseCredits; // What a subscriber would pay
+    const savings = isSubscriber ? baseCredits : 0; // What they saved by subscribing
+
+    return { cost, isSubscriber, savings, subscriberCost };
+  }
+
+  /**
+   * Calculate credit cost synchronously (for backwards compatibility)
+   * Uses non-subscriber rates by default
+   */
+  calculateProcessingCostSync(options: {
     timestampCount: number;
     aspectRatios: string[];
     generateGif: boolean;
     generateThumbnails: boolean;
     generateCanvas: boolean;
-    useFullPack?: boolean;
   }): number {
-    let totalCredits = 0;
+    let baseCredits = 0;
 
-    // Cutdowns: 99 credits per cutdown ($0.99 each)
+    // Cutdowns: base 50 credits per cutdown × 2 for non-subscriber
     if (options.timestampCount > 0 && options.aspectRatios.length > 0) {
       const cutdownsCount = options.timestampCount * options.aspectRatios.length;
-      totalCredits += cutdownsCount * 99;
+      baseCredits += cutdownsCount * CREDIT_COSTS.CUTDOWN;
     }
 
     // Export options
-    if (options.useFullPack && (options.generateGif || options.generateThumbnails || options.generateCanvas)) {
-      totalCredits += 499; // Full pack: 499 credits ($4.99)
-    } else {
-      if (options.generateGif) {
-        totalCredits += 199; // GIF pack: 199 credits ($1.99)
-      }
-      if (options.generateThumbnails) {
-        totalCredits += 199; // Thumbnail pack: 199 credits ($1.99)
-      }
-      if (options.generateCanvas) {
-        totalCredits += 499; // Canvas: 499 credits ($4.99)
-      }
+    if (options.generateGif) {
+      baseCredits += CREDIT_COSTS.GIF_PACK;
+    }
+    if (options.generateThumbnails) {
+      baseCredits += CREDIT_COSTS.THUMBNAIL_PACK;
+    }
+    if (options.generateCanvas) {
+      baseCredits += CREDIT_COSTS.CANVAS_PACK;
     }
 
-    return totalCredits;
+    // Return non-subscriber rate (2×) by default
+    return baseCredits * CREDIT_COSTS.NON_SUBSCRIBER_MULTIPLIER;
   }
 
   /**
@@ -313,32 +391,46 @@ export class CreditService {
       generateGif: boolean;
       generateThumbnails: boolean;
       generateCanvas: boolean;
-      useFullPack?: boolean;
     },
     videoId: number
-  ): Promise<{ success: boolean; cost: number; remainingCredits?: number }> {
-    const cost = this.calculateProcessingCost(options);
+  ): Promise<{ success: boolean; cost: number; remainingCredits?: number; isSubscriber: boolean; savings: number }> {
+    const costResult = await this.calculateProcessingCost(userId, options);
+    const { cost, isSubscriber, savings } = costResult;
 
     // Check if user has enough credits
     const currentCredits = await this.getUserCredits(userId);
     if (currentCredits < cost) {
       console.log(`❌ User ${userId} has insufficient credits: ${currentCredits} < ${cost}`);
-      return { success: false, cost };
+      return { success: false, cost, isSubscriber, savings };
     }
 
     // Deduct credits
     const success = await this.deductCredits(
       userId,
       cost,
-      `Video processing (ID: ${videoId})`
+      `Video processing (ID: ${videoId})${isSubscriber ? ' - Subscriber rate' : ''}`
     );
 
     if (success) {
       const remainingCredits = await this.getUserCredits(userId);
-      return { success: true, cost, remainingCredits };
+      console.log(`✅ Charged ${cost} credits for video ${videoId} (subscriber: ${isSubscriber}, saved: ${savings})`);
+      return { success: true, cost, remainingCredits, isSubscriber, savings };
     }
 
-    return { success: false, cost };
+    return { success: false, cost, isSubscriber, savings };
+  }
+
+  /**
+   * Get pricing info for display (both subscriber and non-subscriber rates)
+   */
+  getPricingInfo(): {
+    subscriberRates: typeof CREDIT_COSTS;
+    nonSubscriberMultiplier: number;
+  } {
+    return {
+      subscriberRates: CREDIT_COSTS,
+      nonSubscriberMultiplier: CREDIT_COSTS.NON_SUBSCRIBER_MULTIPLIER
+    };
   }
 }
 

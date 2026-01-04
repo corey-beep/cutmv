@@ -297,6 +297,8 @@ export class MemStorage implements IStorage {
       referralCode,
       referredBy: null,
       credits: 0,
+      subscriptionCredits: 0,
+      subscriptionCreditResetDate: null,
       referralCount: 0,
       lastCreditGrantAt: null,
       stripeCustomerId: insertUser.stripeCustomerId || null,

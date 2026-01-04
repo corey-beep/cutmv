@@ -321,30 +321,49 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Pricing Preview */}
+      {/* Pricing Preview - Subscription Focused */}
       <section className="py-20 px-4 bg-black">
         <div className="container mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-bold mb-8 text-white">Simple, Transparent Pricing</h2>
-          <p className="text-gray-300 mb-12">Pay only for what you use. No subscriptions, no hidden fees.</p>
-          
-          <div className="grid md:grid-cols-3 gap-8 max-w-3xl mx-auto">
+          <h2 className="text-3xl font-bold mb-4 text-white">Simple, Transparent Pricing</h2>
+          <p className="text-brand-green text-lg font-semibold mb-2">Subscribe and save 50% on all processing</p>
+          <p className="text-gray-400 mb-12">Monthly credits that never expire during your subscription</p>
+
+          {/* Subscription Tiers */}
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-12">
             <div className="bg-black p-6 rounded-xl border border-gray-700 text-center">
-              <h3 className="font-semibold text-lg mb-2 text-white">Video Cutdowns</h3>
-              <div className="text-2xl font-bold text-brand-green mb-2">$0.99</div>
-              <p className="text-gray-400 text-sm">per timestamp per aspect ratio</p>
+              <h3 className="font-semibold text-lg mb-2 text-white">Starter</h3>
+              <div className="text-3xl font-bold text-brand-green mb-1">$10</div>
+              <p className="text-gray-500 text-sm mb-4">/month</p>
+              <div className="text-white font-medium mb-2">1,000 credits</div>
+              <p className="text-gray-400 text-sm">~20 video cutdowns</p>
+              <p className="text-brand-green text-xs mt-3">+ 50% off all processing</p>
+            </div>
+
+            <div className="bg-black p-6 rounded-xl border-2 border-brand-green text-center relative">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-green text-black">Popular</Badge>
+              <h3 className="font-semibold text-lg mb-2 text-white mt-2">Pro</h3>
+              <div className="text-3xl font-bold text-brand-green mb-1">$25</div>
+              <p className="text-gray-500 text-sm mb-4">/month</p>
+              <div className="text-white font-medium mb-2">3,000 credits</div>
+              <p className="text-gray-400 text-sm">~60 video cutdowns</p>
+              <p className="text-brand-green text-xs mt-3">+ Bulk ZIP downloads</p>
             </div>
 
             <div className="bg-black p-6 rounded-xl border border-gray-700 text-center">
-              <h3 className="font-semibold text-lg mb-2 text-white">GIFs & Thumbnails</h3>
-              <div className="text-2xl font-bold text-brand-green mb-2">$1.99</div>
-              <p className="text-gray-400 text-sm">pack of 10 per export type</p>
+              <h3 className="font-semibold text-lg mb-2 text-white">Enterprise</h3>
+              <div className="text-3xl font-bold text-brand-green mb-1">$75</div>
+              <p className="text-gray-500 text-sm mb-4">/month</p>
+              <div className="text-white font-medium mb-2">10,000 credits</div>
+              <p className="text-gray-400 text-sm">~200 video cutdowns</p>
+              <p className="text-brand-green text-xs mt-3">+ Priority support</p>
             </div>
+          </div>
 
-            <div className="bg-black p-6 rounded-xl border border-gray-700 text-center">
-              <h3 className="font-semibold text-lg mb-2 text-white">Spotify Canvas</h3>
-              <div className="text-2xl font-bold text-brand-green mb-2">$4.99</div>
-              <div className="text-gray-400 text-sm">pack of 5 professional vertical loops</div>
-            </div>
+          {/* Per-export pricing (secondary) */}
+          <div className="text-gray-500 text-sm mb-8">
+            <p className="mb-2">Or pay as you go:</p>
+            <p>Cutdowns from 50 credits | GIF/Thumbnail packs from 90 credits | Canvas from 225 credits</p>
+            <p className="text-xs text-gray-600 mt-1">Non-subscribers pay 2× rates</p>
           </div>
 
           <div className="mt-8">

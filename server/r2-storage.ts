@@ -602,7 +602,7 @@ Support: Available via platform interface
 
       const hasAccess = (objectUserEmail === userEmail) ||
                        keyContainsUserPath ||
-                       (userEmail && r2Key.includes('exports/')); // Allow authenticated users to access exports
+                       (!!userEmail && r2Key.includes('exports/')); // Allow authenticated users to access exports
 
       console.log(`🔐 User access check: ${r2Key} for ${userEmail} = ${hasAccess ? 'GRANTED' : 'DENIED'}`);
       console.log(`🔍 Validation: metadata=${objectUserEmail}, paths=${userPathWithoutAt}|${userPathWithAt}, keyContains=${keyContainsUserPath}`);

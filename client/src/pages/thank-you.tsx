@@ -5,7 +5,7 @@
  */
 
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Clock, Mail, CheckCircle, Loader2, Download, BarChart3 } from "lucide-react";
+import { ArrowLeft, Clock, Mail, CheckCircle, Loader2, Download, BarChart3, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -20,6 +20,8 @@ export default function ThankYou() {
   const [videoId, setVideoId] = useState<number | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [canBulkDownload, setCanBulkDownload] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
   // Get encrypted session token from URL (no sensitive data exposed)
   const params = new URLSearchParams(location.search);
@@ -123,7 +125,58 @@ export default function ThankYou() {
       }
     }
   }, [progressData]);
-  
+
+  // Check if user can bulk download (Pro+ feature)
+  useEffect(() => {
+    const checkBulkDownload = async () => {
+      try {
+        const response = await fetch('/api/can-bulk-download', {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCanBulkDownload(data.canBulkDownload);
+        }
+      } catch (error) {
+        console.log('Could not check bulk download permission');
+      }
+    };
+
+    if (user) {
+      checkBulkDownload();
+    }
+  }, [user]);
+
+  // Handle bulk ZIP download
+  const handleBulkDownload = async () => {
+    if (!sessionId) return;
+
+    setIsDownloadingZip(true);
+    try {
+      const response = await fetch(`/api/bulk-download/${sessionId}`, {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cutmv_exports_${sessionId}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        console.error('Bulk download failed');
+      }
+    } catch (error) {
+      console.error('Bulk download error:', error);
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -275,9 +328,19 @@ export default function ThankYou() {
                       Download Files
                     </a>
                   )}
-                  <Button 
+                  {canBulkDownload && sessionId && (
+                    <button
+                      onClick={handleBulkDownload}
+                      disabled={isDownloadingZip}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-brand-green text-brand-black rounded-lg hover:bg-brand-green-light transition-colors text-sm font-medium disabled:opacity-50"
+                    >
+                      <Archive className="w-4 h-4" />
+                      {isDownloadingZip ? 'Creating ZIP...' : 'Download All as ZIP'}
+                    </button>
+                  )}
+                  <Button
                     onClick={() => window.location.href = '/app/dashboard'}
-                    variant="outline" 
+                    variant="outline"
                     className="border-green-200 text-green-700 hover:bg-green-50"
                   >
                     <BarChart3 className="w-4 h-4 mr-2" />

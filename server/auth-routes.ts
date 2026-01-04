@@ -50,7 +50,7 @@ router.post('/verify-code', async (req, res) => {
     const { user, session } = await authService.verifyCode(validatedData.email, code);
 
     // Set session cookie with matching name and settings as magic link verification
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT;
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.REPLIT_DEPLOYMENT;
 
     res.cookie('cutmv-session', session.token, {
       httpOnly: true,

@@ -22,6 +22,7 @@ export interface SubscriptionPlan {
   monthlyCredits: number;
   price: number; // in cents
   description: string;
+  hasBulkDownload: boolean; // Pro+ feature: download all exports as ZIP
 }
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -29,25 +30,28 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'starter',
     name: 'Starter',
     priceId: process.env.STRIPE_STARTER_PRICE_ID || 'price_starter',
-    monthlyCredits: 1000, // $10 = 1000 credits conversion rate
-    price: 999, // $9.99/month
-    description: '1,000 credits per month for basic video processing - resets monthly'
+    monthlyCredits: 1000,
+    price: 1000, // $10/month
+    description: '1,000 credits per month + 50% off all processing',
+    hasBulkDownload: false
   },
   {
     id: 'pro',
     name: 'Pro',
     priceId: process.env.STRIPE_PRO_PRICE_ID || 'price_pro',
-    monthlyCredits: 3000, // 3x starter plan
-    price: 1999, // $19.99/month
-    description: '3,000 credits per month for professional use - resets monthly'
+    monthlyCredits: 3000,
+    price: 2500, // $25/month
+    description: '3,000 credits per month + 50% off all processing + bulk ZIP downloads',
+    hasBulkDownload: true
   },
   {
-    id: 'business',
-    name: 'Business',
-    priceId: process.env.STRIPE_BUSINESS_PRICE_ID || 'price_business',
-    monthlyCredits: 10000, // 10x starter plan
-    price: 4999, // $49.99/month
-    description: '10,000 credits per month for business teams - resets monthly'
+    id: 'enterprise',
+    name: 'Enterprise',
+    priceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_enterprise',
+    monthlyCredits: 10000,
+    price: 7500, // $75/month
+    description: '10,000 credits per month + 50% off all processing + bulk ZIP downloads + priority support',
+    hasBulkDownload: true
   }
 ];
 
@@ -336,6 +340,28 @@ export class SubscriptionService {
    */
   getPlans(): SubscriptionPlan[] {
     return SUBSCRIPTION_PLANS;
+  }
+
+  /**
+   * Check if user has Pro or higher subscription (for bulk download feature)
+   */
+  async hasProOrHigher(userId: string): Promise<boolean> {
+    const status = await this.getSubscriptionStatus(userId);
+    if (!status.hasActiveSubscription || !status.plan) {
+      return false;
+    }
+    return status.plan.id === 'pro' || status.plan.id === 'enterprise';
+  }
+
+  /**
+   * Check if user can use bulk ZIP download feature
+   */
+  async canBulkDownload(userId: string): Promise<boolean> {
+    const status = await this.getSubscriptionStatus(userId);
+    if (!status.hasActiveSubscription || !status.plan) {
+      return false;
+    }
+    return status.plan.hasBulkDownload;
   }
 }
 

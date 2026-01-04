@@ -9,18 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Download, 
-  Clock, 
-  Video, 
-  Image, 
-  FileText, 
+import {
+  Download,
+  Clock,
+  Video,
+  Image,
+  FileText,
   Music,
   Upload,
   RefreshCw,
   AlertCircle,
   Loader,
-  Play
+  Play,
+  CreditCard,
+  Sparkles
 } from 'lucide-react';
 
 import FaviconProvider from '@/components/FaviconProvider';
@@ -60,12 +62,27 @@ interface DashboardExport {
   completedAt?: string;
 }
 
+// Subscription status type
+interface SubscriptionStatus {
+  hasActiveSubscription: boolean;
+  plan?: {
+    id: string;
+    name: string;
+    monthlyCredits: number;
+    price: number;
+    hasBulkDownload: boolean;
+  };
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+}
+
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
   const [uploads, setUploads] = useState<DashboardUpload[]>([]);
   const [exports, setExports] = useState<DashboardExport[]>([]);
   const [activeTab, setActiveTab] = useState<'uploads' | 'exports'>('exports');
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -160,7 +177,30 @@ export default function DashboardPage() {
         console.error('❌ Export fetch error:', exportError);
         setExports([]);
       }
-      
+
+      // Fetch subscription status
+      try {
+        const subscriptionResponse = await fetch('/api/subscription/status', {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (subscriptionResponse.ok) {
+          const subscriptionData = await subscriptionResponse.json();
+          console.log('💳 Subscription status:', subscriptionData);
+          setSubscriptionStatus(subscriptionData);
+        } else {
+          console.log('💳 No subscription or not authenticated');
+          setSubscriptionStatus({ hasActiveSubscription: false });
+        }
+      } catch (subscriptionError) {
+        console.error('❌ Subscription fetch error:', subscriptionError);
+        setSubscriptionStatus({ hasActiveSubscription: false });
+      }
+
     } catch (error) {
       console.error('❌ Error fetching dashboard data:', error);
       setUploads([]);
@@ -344,7 +384,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Stats and Credits */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Exports</CardTitle>
@@ -364,6 +404,38 @@ export default function DashboardPage() {
                   <div className="text-2xl font-bold">
                     {exports.filter(e => e.status === 'completed' && new Date(e.expiresAt) > new Date()).length}
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Subscription</CardTitle>
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  {subscriptionStatus?.hasActiveSubscription ? (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl font-bold text-brand-green">{subscriptionStatus.plan?.name}</span>
+                        <Badge className="bg-brand-green text-white">Active</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        <Sparkles className="w-3 h-3 inline mr-1" />
+                        50% off all processing
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-lg font-bold text-muted-foreground">No Plan</div>
+                      <Button
+                        size="sm"
+                        className="mt-2 bg-brand-green hover:bg-brand-green-light text-brand-black text-xs"
+                        onClick={() => window.location.href = '/profile?tab=subscription'}
+                      >
+                        Subscribe & Save 50%
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

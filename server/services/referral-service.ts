@@ -196,7 +196,7 @@ class ReferralService {
         .where(
           and(
             eq(creditTransactions.userId, referrer.id),
-            eq(creditTransactions.type, 'earned'),
+            eq(creditTransactions.transactionType, 'earned'),
             gte(creditTransactions.createdAt, weekAgo)
           )
         );
@@ -226,7 +226,7 @@ class ReferralService {
       const creditExpiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
       await db.insert(creditTransactions).values({
         userId: referrer.id,
-        type: 'earned',
+        transactionType: 'earned',
         amount: 1,
         note: `Referral signup: ${userEmail}`,
         referralEventId: referralEvent.id,
@@ -311,7 +311,7 @@ class ReferralService {
       const creditExpiry = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
       await db.insert(creditTransactions).values({
         userId: referrer.id,
-        type: 'earned',
+        transactionType: 'earned',
         amount: 1,
         note: `First export bonus: ${user.email}`,
         referralEventId: referralEvent.id,
@@ -351,7 +351,7 @@ class ReferralService {
       // Create redemption transaction
       await db.insert(creditTransactions).values({
         userId,
-        type: 'spent',
+        transactionType: 'spent',
         amount: -amount,
         note: purpose,
         referralEventId: null,
@@ -396,7 +396,7 @@ class ReferralService {
 
       // Get credit history
       const creditHistory = await db.select({
-        type: creditTransactions.type,
+        type: creditTransactions.transactionType,
         amount: creditTransactions.amount,
         note: creditTransactions.note,
         createdAt: creditTransactions.createdAt,
@@ -413,7 +413,7 @@ class ReferralService {
         .where(
           and(
             eq(creditTransactions.userId, userId),
-            eq(creditTransactions.type, 'earned')
+            eq(creditTransactions.transactionType, 'earned')
           )
         );
 
@@ -422,7 +422,7 @@ class ReferralService {
         .where(
           and(
             eq(creditTransactions.userId, userId),
-            eq(creditTransactions.type, 'spent')
+            eq(creditTransactions.transactionType, 'spent')
           )
         );
 
@@ -464,7 +464,7 @@ class ReferralService {
         .from(creditTransactions)
         .where(
           and(
-            eq(creditTransactions.type, 'earned'),
+            eq(creditTransactions.transactionType, 'earned'),
             gte(creditTransactions.expiresAt, now)
           )
         );
@@ -475,7 +475,7 @@ class ReferralService {
         // Create expiration transaction
         await db.insert(creditTransactions).values({
           userId: credit.userId,
-          type: 'expired',
+          transactionType: 'expired',
           amount: -credit.amount,
           note: `Credit expired: ${credit.note}`,
           referralEventId: credit.referralEventId,
@@ -517,11 +517,11 @@ class ReferralService {
       // Total credits issued and redeemed
       const creditsIssuedResult = await db.select({ total: sum(creditTransactions.amount) })
         .from(creditTransactions)
-        .where(eq(creditTransactions.type, 'earned'));
+        .where(eq(creditTransactions.transactionType, 'earned'));
 
       const creditsRedeemedResult = await db.select({ total: sum(creditTransactions.amount) })
         .from(creditTransactions)
-        .where(eq(creditTransactions.type, 'spent'));
+        .where(eq(creditTransactions.transactionType, 'spent'));
 
       // Top referrers
       const topReferrers = await db.select({

@@ -11,7 +11,7 @@ import Stripe from 'stripe';
 
 const router = Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-07-30.basil',
 });
 
 /**
@@ -148,27 +148,35 @@ router.post('/first-export-bonus', requireAuth, async (req, res) => {
 
 /**
  * Calculate credit cost for processing options
+ * Returns subscriber-aware pricing with both rates
  */
 router.post('/calculate-cost', requireAuth, async (req, res) => {
   try {
-    const { timestampText, aspectRatios = [], generateGif = false, generateThumbnails = false, generateCanvas = false, useFullPack = false } = req.body;
+    const { timestampText, aspectRatios = [], generateGif = false, generateThumbnails = false, generateCanvas = false } = req.body;
 
     // Count timestamps
     const timestampCount = timestampText
       ? timestampText.split('\n').filter((line: string) => line.trim() && line.match(/\d+:\d+\s*-\s*\d+:\d+/)).length
       : 0;
 
-    const cost = creditService.calculateProcessingCost({
+    // Use async method with subscriber awareness
+    const costResult = await creditService.calculateProcessingCost(req.user!.id, {
       timestampCount,
       aspectRatios,
       generateGif,
       generateThumbnails,
-      generateCanvas,
-      useFullPack
+      generateCanvas
     });
 
+    const { cost, isSubscriber, savings, subscriberCost } = costResult;
     const currentCredits = await creditService.getUserCredits(req.user!.id);
     const canAfford = currentCredits >= cost;
+
+    // Calculate breakdown with subscriber-aware rates
+    const cutdownRate = isSubscriber ? 50 : 100;
+    const gifRate = isSubscriber ? 90 : 180;
+    const thumbRate = isSubscriber ? 90 : 180;
+    const canvasRate = isSubscriber ? 225 : 450;
 
     res.json({
       success: true,
@@ -176,12 +184,17 @@ router.post('/calculate-cost', requireAuth, async (req, res) => {
       currentCredits,
       canAfford,
       shortfall: canAfford ? 0 : cost - currentCredits,
+
+      // Subscriber info
+      isSubscriber,
+      subscriberCost,
+      potentialSavings: isSubscriber ? 0 : subscriberCost,
+
       breakdown: {
-        cutdowns: timestampCount > 0 && aspectRatios.length > 0 ? timestampCount * aspectRatios.length * 99 : 0,
-        gifPack: generateGif && !useFullPack ? 199 : 0,
-        thumbnailPack: generateThumbnails && !useFullPack ? 199 : 0,
-        canvas: generateCanvas && !useFullPack ? 499 : 0,
-        fullPack: useFullPack && (generateGif || generateThumbnails || generateCanvas) ? 499 : 0
+        cutdowns: timestampCount > 0 && aspectRatios.length > 0 ? timestampCount * aspectRatios.length * cutdownRate : 0,
+        gifPack: generateGif ? gifRate : 0,
+        thumbnailPack: generateThumbnails ? thumbRate : 0,
+        canvas: generateCanvas ? canvasRate : 0
       }
     });
   } catch (error) {
@@ -193,22 +206,35 @@ router.post('/calculate-cost', requireAuth, async (req, res) => {
   }
 });
 
+// Credit refill packages - tiered pricing with bonus credits at higher tiers
+const CREDIT_PACKAGES: Record<number, number> = {
+  5: 500,    // $5 = 500 credits
+  10: 1000,  // $10 = 1,000 credits
+  25: 3000,  // $25 = 3,000 credits (20% bonus)
+};
+
 /**
  * Create Stripe checkout session for credit purchase
  */
 router.post('/purchase', requireAuth, async (req, res) => {
   try {
-    const { amount } = req.body; // Amount in dollars (e.g., 10, 25, 50, 100)
+    const { amount } = req.body; // Amount in dollars (e.g., 5, 10, 25)
 
-    if (!amount || amount < 10) {
+    if (!amount || amount < 5) {
       return res.status(400).json({
         success: false,
-        error: 'Minimum purchase amount is $10'
+        error: 'Minimum purchase amount is $5'
       });
     }
 
-    // Calculate credits: $10 = 1000 credits
-    const credits = amount * 100;
+    // Calculate credits based on package or linear rate
+    let credits: number;
+    if (CREDIT_PACKAGES[amount]) {
+      credits = CREDIT_PACKAGES[amount];
+    } else {
+      // Linear rate for other amounts: $1 = 100 credits
+      credits = amount * 100;
+    }
 
     // Create Stripe checkout session for credit purchase
     const session = await stripe.checkout.sessions.create({
@@ -217,8 +243,8 @@ router.post('/purchase', requireAuth, async (req, res) => {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `${credits} CUTMV Credits`,
-            description: `Credit package: $${amount} = ${credits} credits ($10 = 1000 credits)`,
+            name: `${credits.toLocaleString()} CUTMV Credits`,
+            description: `Credit package: $${amount} = ${credits.toLocaleString()} credits`,
           },
           unit_amount: amount * 100, // Convert to cents
         },
@@ -251,6 +277,20 @@ router.post('/purchase', requireAuth, async (req, res) => {
       error: 'Failed to create checkout session'
     });
   }
+});
+
+/**
+ * Get available credit packages
+ */
+router.get('/packages', requireAuth, async (req, res) => {
+  res.json({
+    success: true,
+    packages: Object.entries(CREDIT_PACKAGES).map(([amount, credits]) => ({
+      amount: parseInt(amount),
+      credits,
+      popular: amount === '10'
+    }))
+  });
 });
 
 export default router;

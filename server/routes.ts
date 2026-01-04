@@ -13,7 +13,6 @@ import path from "path";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import ffmpeg from "fluent-ffmpeg";
-import AdmZip from "adm-zip";
 import Stripe from "stripe";
 import { insertVideoSchema, timestampListSchema, paymentRequestSchema, promoCodeValidationSchema } from "@shared/schema";
 import crypto from "crypto";
@@ -37,9 +36,10 @@ import { blogService } from './blog-service.js';
 import { promoCodeService } from './services/promoCodeService.js';
 import { urlSecurity } from './url-security.js';
 import { AuthService } from './auth-service';
-import { requireAuth } from './auth-middleware';
+import { requireAuth, optionalAuth } from './auth-middleware';
 import { TimeEstimationService } from '../shared/time-estimation.js';
 import { creditService } from './services/credit-service.js';
+import { subscriptionService } from './services/subscription-service.js';
 
 // Initialize auth service instance
 const authService = new AuthService();
@@ -336,16 +336,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Pricing endpoint
-  app.get("/api/pricing", (req, res) => {
-    res.json({
-      cutdown16x9: 99,
-      cutdown9x16: 99,
-      spotifyCanvas: 599,    // $5.99 - premium Canvas feature
-      gifPack: 249,          // $2.49 - increased from $1.99
-      thumbnailPack: 249,    // $2.49 - increased from $1.99
-      fullFeaturePack: 699   // $6.99 - saves $3.98 (36% discount)
-    });
+  // Pricing endpoint - returns subscriber-aware pricing
+  // Subscribers get 50% off (base rates), non-subscribers pay 2×
+  app.get("/api/pricing", optionalAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const isSubscriber = userId ? await creditService.isActiveSubscriber(userId) : false;
+      const multiplier = isSubscriber ? 1 : 2;
+
+      // Base subscriber rates (from CREDIT_COSTS)
+      const subscriberRates = {
+        cutdown: 50,          // Per cutdown
+        gifPack: 90,          // GIF pack (10 GIFs)
+        thumbnailPack: 90,    // Thumbnail pack (10 thumbnails)
+        canvasPack: 225       // Spotify Canvas pack (5 loops)
+      };
+
+      // Non-subscriber rates (2×)
+      const nonSubscriberRates = {
+        cutdown: 100,
+        gifPack: 180,
+        thumbnailPack: 180,
+        canvasPack: 450
+      };
+
+      res.json({
+        // Applied rates based on user's subscription status
+        cutdown: subscriberRates.cutdown * multiplier,
+        gifPack: subscriberRates.gifPack * multiplier,
+        thumbnailPack: subscriberRates.thumbnailPack * multiplier,
+        canvasPack: subscriberRates.canvasPack * multiplier,
+
+        // User's subscription info
+        isSubscriber,
+        subscriberDiscount: isSubscriber ? 50 : 0, // Percentage saved
+
+        // Both rate tables for UI display
+        subscriberRates,
+        nonSubscriberRates,
+
+        // Legacy fields for backwards compatibility
+        cutdown16x9: subscriberRates.cutdown * multiplier,
+        cutdown9x16: subscriberRates.cutdown * multiplier,
+        spotifyCanvas: subscriberRates.canvasPack * multiplier
+      });
+    } catch (error) {
+      console.error('Error getting pricing:', error);
+      res.status(500).json({ error: 'Failed to get pricing' });
+    }
   });
 
   // Video upload endpoints
@@ -881,72 +919,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Price calculation endpoint
+  // Price calculation endpoint - subscriber-aware pricing
   app.post('/api/calculate-price', requireAuth, async (req, res) => {
     try {
-      const { 
-        timestampText, 
-        aspectRatios = [], 
-        generateGif = false, 
-        generateThumbnails = false, 
-        generateCanvas = false, 
-        useFullPack = false, 
-        discountCode = '' 
+      const {
+        timestampText,
+        aspectRatios = [],
+        generateGif = false,
+        generateThumbnails = false,
+        generateCanvas = false,
+        discountCode = ''
       } = req.body;
 
       console.log('💰 Price calculation request:', {
         timestampText: timestampText ? `${timestampText.length} chars` : 'none',
         aspectRatios,
         generateGif,
-        generateThumbnails, 
+        generateThumbnails,
         generateCanvas,
-        useFullPack,
         discountCode: discountCode ? `${discountCode} (${discountCode.length} chars)` : 'none'
       });
 
       // Count timestamps
-      const timestampCount = timestampText ? 
+      const timestampCount = timestampText ?
         timestampText.split('\n')
           .filter((line: string) => line.trim() && line.match(/\d+:\d+\s*-\s*\d+:\d+/))
           .length : 0;
 
-      let totalAmount = 0;
+      // Use the credit service to calculate costs with subscriber awareness
+      const userId = req.user?.id || null;
+      const costResult = await creditService.calculateProcessingCost(userId, {
+        timestampCount,
+        aspectRatios,
+        generateGif,
+        generateThumbnails,
+        generateCanvas
+      });
 
-      // Base pricing (value-based bundle structure)
-      const pricing = {
-        cutdown16x9: 99,      // $0.99 per clip
-        cutdown9x16: 99,      // $0.99 per clip
-        gifPack: 249,         // $2.49 for 10 GIFs
-        thumbnailPack: 249,   // $2.49 for 10 thumbnails
-        spotifyCanvas: 599,   // $5.99 for 5 Canvas loops (premium feature)
-        fullFeaturePack: 699  // $6.99 (saves $3.98, 36% discount from $10.97)
-      };
+      const { cost: totalAmount, isSubscriber, savings, subscriberCost } = costResult;
 
-      // Calculate cutdown pricing
-      if (timestampCount > 0 && aspectRatios.length > 0) {
-        const cutdownsCount = timestampCount * aspectRatios.length;
-        totalAmount += cutdownsCount * pricing.cutdown16x9; // Same price for both aspect ratios
-        console.log(`💰 Cutdowns: ${cutdownsCount} clips (${timestampCount} timestamps × ${aspectRatios.length} ratios) = $${(cutdownsCount * pricing.cutdown16x9 / 100).toFixed(2)}`);
-      }
-
-      // Calculate export options
-      if (useFullPack && (generateGif || generateThumbnails || generateCanvas)) {
-        totalAmount += pricing.fullFeaturePack;
-        console.log(`💰 Full Pack: $${(pricing.fullFeaturePack / 100).toFixed(2)}`);
-      } else {
-        if (generateGif) {
-          totalAmount += pricing.gifPack;
-          console.log(`💰 GIF Pack: $${(pricing.gifPack / 100).toFixed(2)}`);
-        }
-        if (generateThumbnails) {
-          totalAmount += pricing.thumbnailPack;
-          console.log(`💰 Thumbnail Pack: $${(pricing.thumbnailPack / 100).toFixed(2)}`);
-        }
-        if (generateCanvas) {
-          totalAmount += pricing.spotifyCanvas;
-          console.log(`💰 Canvas Pack: $${(pricing.spotifyCanvas / 100).toFixed(2)}`);
-        }
-      }
+      console.log(`💰 Price calculated: ${totalAmount} credits (subscriber: ${isSubscriber}, would save: ${savings})`);
 
       // Apply discount codes
       let discountApplied = 0;
@@ -955,7 +967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (discountCode.trim()) {
         const trimmedCode = discountCode.trim().toUpperCase();
         console.log(`💰 Applying promo code: ${trimmedCode}`);
-        
+
         switch (trimmedCode) {
           case 'STAFF25':
             discountApplied = totalAmount; // 100% off
@@ -980,16 +992,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const finalAmount = Math.max(0, totalAmount - discountApplied);
 
-      console.log(`💰 Final calculation: $${(totalAmount / 100).toFixed(2)} - $${(discountApplied / 100).toFixed(2)} = $${(finalAmount / 100).toFixed(2)}`);
+      console.log(`💰 Final calculation: ${totalAmount} - ${discountApplied} = ${finalAmount} credits`);
+
+      // Calculate what the subscriber would pay (for upsell messaging)
+      const nonSubscriberCost = isSubscriber ? totalAmount * 2 : totalAmount;
 
       res.json({
         totalAmount: finalAmount,
         discountApplied,
         promoValidation,
         originalAmount: totalAmount,
+
+        // Subscriber-aware info
+        isSubscriber,
+        subscriberCost,  // What a subscriber would pay
+        nonSubscriberCost: isSubscriber ? nonSubscriberCost : totalAmount,  // What a non-subscriber would pay
+        potentialSavings: isSubscriber ? 0 : subscriberCost,  // How much they'd save by subscribing
+
         breakdown: {
-          cutdowns: timestampCount > 0 && aspectRatios.length > 0 ? timestampCount * aspectRatios.length * pricing.cutdown16x9 : 0,
-          exports: totalAmount - (timestampCount > 0 && aspectRatios.length > 0 ? timestampCount * aspectRatios.length * pricing.cutdown16x9 : 0)
+          cutdowns: timestampCount > 0 && aspectRatios.length > 0
+            ? timestampCount * aspectRatios.length * (isSubscriber ? 50 : 100)
+            : 0,
+          exports: totalAmount - (timestampCount > 0 && aspectRatios.length > 0
+            ? timestampCount * aspectRatios.length * (isSubscriber ? 50 : 100)
+            : 0)
         }
       });
 
@@ -1146,48 +1172,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           shortfall: creditsRequired - userCredits,
           message: `You need ${creditsRequired} credits but only have ${userCredits}. Please purchase ${creditsRequired - userCredits} more credits to continue.`
         });
-
-        // OLD CODE: Create Stripe checkout session for paid processing (NO LONGER USED)
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ['card'],
-          line_items: [{
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: 'CUTMV Video Processing',
-                description: 'Professional video processing and export generation',
-              },
-              unit_amount: totalAmount,
-            },
-            quantity: 1,
-          }],
-          mode: 'payment',
-          success_url: `${req.headers.origin}/app?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${req.headers.origin}/app?payment=cancelled`,
-          metadata: {
-            videoId: videoId.toString(),
-            userId: req.user!.id.toString(),
-            processingOptions: JSON.stringify({
-              generateCutdowns: aspectRatios.length > 0,
-              generateGif: validatedBody.generateGif || false,
-              generateThumbnails: validatedBody.generateThumbnails || false,
-              generateCanvas: validatedBody.generateCanvas || false,
-              aspectRatios,
-              quality: 'high',
-              videoFade: true,
-              audioFade: true,
-              fadeDuration: 0.5
-            }),
-            timestampText,
-            aspectRatios: JSON.stringify(aspectRatios),
-            promoCode: promoCode || '',
-            creditsApplied: creditsToApply.toString(),
-            creditDiscount: creditDiscount.toString(),
-          },
-        });
-
-        res.json({ sessionId: session.id, url: session.url });
-
       } catch (error) {
         console.error('Payment session creation error:', error);
         res.status(500).json({ error: 'Failed to create payment session' });
@@ -1255,6 +1239,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Token debug error:', error);
       res.status(500).json({ error: 'Debug failed' });
+    }
+  });
+
+  // Bulk ZIP download endpoint - Pro+ subscribers only
+  app.get('/api/bulk-download/:sessionId', requireAuth, async (req, res) => {
+    try {
+      const sessionId = req.params.sessionId;
+      const userId = req.user?.id;
+      const userEmail = req.user?.email;
+
+      if (!userId || !userEmail) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      // Check if user has Pro+ subscription with bulk download access
+      const canBulkDownload = await subscriptionService.canBulkDownload(userId);
+      if (!canBulkDownload) {
+        return res.status(403).json({
+          error: 'Bulk download is a Pro+ feature',
+          message: 'Upgrade to Pro or Enterprise to download all exports as a single ZIP file'
+        });
+      }
+
+      console.log(`📦 Bulk download requested for session: ${sessionId} by ${userEmail}`);
+
+      // Get the background job
+      const job = await storage.getBackgroundJob(sessionId);
+      if (!job) {
+        return res.status(404).json({ error: 'Export session not found' });
+      }
+
+      // Verify user owns this job
+      if (job.userEmail !== userEmail) {
+        return res.status(404).json({ error: 'Export session not found' });
+      }
+
+      // Check job is completed
+      if (job.status !== 'completed') {
+        return res.status(400).json({ error: 'Export is still processing' });
+      }
+
+      // Check job has a download path
+      if (!job.downloadPath) {
+        return res.status(404).json({ error: 'No exports available for this session' });
+      }
+
+      console.log(`📦 Fetching exports from R2: ${job.downloadPath}`);
+
+      // Get the export ZIP from R2
+      const { R2Storage } = await import('./r2-storage.js');
+      const r2Key = job.downloadPath.startsWith('/api/download/')
+        ? job.downloadPath.replace('/api/download/', '')
+        : job.downloadPath;
+
+      const zipBuffer = await R2Storage.downloadFile(r2Key);
+
+      if (!zipBuffer || zipBuffer.length === 0) {
+        return res.status(404).json({ error: 'Export files not found in storage' });
+      }
+
+      // Generate ZIP filename from associated video
+      let zipFilename = 'cutmv_exports.zip';
+      if (job.videoId) {
+        const video = await storage.getVideo(job.videoId);
+        if (video) {
+          const videoName = (video.videoTitle || video.originalName)?.replace(/\.[^/.]+$/, '') || 'exports';
+          zipFilename = `${videoName}_cutmv_exports.zip`;
+        }
+      }
+
+      // Send ZIP file
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+      res.setHeader('Content-Length', zipBuffer.length);
+      res.send(zipBuffer);
+
+      console.log(`📦 Bulk download complete: ${zipFilename} (${zipBuffer.length} bytes)`);
+    } catch (error) {
+      console.error('Bulk download error:', error);
+      res.status(500).json({ error: 'Bulk download failed' });
+    }
+  });
+
+  // Check if user can bulk download (for frontend to show/hide button)
+  app.get('/api/can-bulk-download', requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.json({ canBulkDownload: false });
+      }
+
+      const canBulkDownload = await subscriptionService.canBulkDownload(userId);
+      res.json({ canBulkDownload });
+    } catch (error) {
+      console.error('Can bulk download check error:', error);
+      res.json({ canBulkDownload: false });
     }
   });
 

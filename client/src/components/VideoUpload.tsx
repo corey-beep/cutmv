@@ -105,7 +105,6 @@ export default function VideoUpload({ onVideoUpload, uploadedVideo }: VideoUploa
     // Reset all upload state
     setIsUploading(false);
     setUploadProgress(0);
-    setSelectedFile(null);
     setIsProcessingVideo(false);
 
     // Reset file input

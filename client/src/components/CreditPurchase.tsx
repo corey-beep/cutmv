@@ -12,10 +12,9 @@ import { Coins, CreditCard, Check, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const CREDIT_PACKAGES = [
-  { amount: 10, credits: 1000, popular: false },
-  { amount: 25, credits: 2500, popular: true },
-  { amount: 50, credits: 5000, popular: false },
-  { amount: 100, credits: 10000, popular: false },
+  { amount: 5, credits: 500, popular: false },
+  { amount: 10, credits: 1000, popular: true },
+  { amount: 25, credits: 3000, popular: false, bonus: '20% bonus' },
 ];
 
 interface CreditPurchaseProps {
@@ -95,7 +94,7 @@ export default function CreditPurchase({ onPurchaseComplete }: CreditPurchasePro
           </div>
 
           {/* Package Selection */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {CREDIT_PACKAGES.map((pkg) => (
               <button
                 key={pkg.amount}
@@ -109,6 +108,11 @@ export default function CreditPurchase({ onPurchaseComplete }: CreditPurchasePro
                 {pkg.popular && (
                   <Badge className="absolute -top-2 -right-2 bg-brand-green text-brand-black">
                     Popular
+                  </Badge>
+                )}
+                {'bonus' in pkg && pkg.bonus && (
+                  <Badge className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs">
+                    {pkg.bonus}
                   </Badge>
                 )}
                 <div className="text-center">
@@ -170,14 +174,17 @@ export default function CreditPurchase({ onPurchaseComplete }: CreditPurchasePro
           {/* Example Usage */}
           <div className="border-t pt-4">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Example Usage:
+              Credit Usage (Subscriber rates):
             </p>
             <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• 1 cutdown video: 99 credits</li>
-              <li>• GIF pack (10 GIFs): 199 credits</li>
-              <li>• Thumbnail pack (10 thumbnails): 199 credits</li>
-              <li>• Spotify Canvas (5 loops): 499 credits</li>
+              <li>• 1 cutdown video: <span className="font-medium">50 credits</span> <span className="text-gray-400">(100 non-sub)</span></li>
+              <li>• GIF pack (10 GIFs): <span className="font-medium">90 credits</span> <span className="text-gray-400">(180 non-sub)</span></li>
+              <li>• Thumbnail pack (10 thumbnails): <span className="font-medium">90 credits</span> <span className="text-gray-400">(180 non-sub)</span></li>
+              <li>• Spotify Canvas (5 loops): <span className="font-medium">225 credits</span> <span className="text-gray-400">(450 non-sub)</span></li>
             </ul>
+            <p className="text-xs text-brand-green mt-2 font-medium">
+              Subscribe to save 50% on all processing!
+            </p>
           </div>
         </div>
       </CardContent>
