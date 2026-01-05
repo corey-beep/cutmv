@@ -10,8 +10,19 @@ import { users } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { creditService } from './credit-service';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('⚠️ STRIPE_SECRET_KEY is not set!');
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-07-30.basil',
+});
+
+// Log subscription plan configuration at startup
+console.log('📋 Subscription plans configured:', {
+  starter: process.env.STRIPE_STARTER_PRICE_ID || '⚠️ NOT SET (using fallback)',
+  pro: process.env.STRIPE_PRO_PRICE_ID || '⚠️ NOT SET (using fallback)',
+  enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID || '⚠️ NOT SET (using fallback)'
 });
 
 // Subscription plan configuration
@@ -143,9 +154,16 @@ export class SubscriptionService {
 
       console.log(`✅ Created checkout session ${session.id} for user ${userId}`);
       return session.url!;
-    } catch (error) {
-      console.error('Error creating checkout session:', error);
-      throw new Error('Failed to create checkout session');
+    } catch (error: any) {
+      console.error('Error creating checkout session:', {
+        message: error?.message,
+        type: error?.type,
+        code: error?.code,
+        param: error?.param,
+        planId,
+        priceId: plan.priceId
+      });
+      throw new Error(error?.message || 'Failed to create checkout session');
     }
   }
 

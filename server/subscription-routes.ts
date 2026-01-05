@@ -57,6 +57,12 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
   try {
     const { planId } = req.body;
 
+    console.log('📦 Create checkout request:', {
+      planId,
+      userId: req.user!.id,
+      email: req.user!.email
+    });
+
     if (!planId) {
       return res.status(400).json({
         success: false,
@@ -76,12 +82,14 @@ router.post('/create-checkout', requireAuth, async (req, res) => {
       `${baseUrl}/app/subscription`
     );
 
+    console.log('✅ Checkout URL created:', checkoutUrl);
+
     res.json({
       success: true,
       checkoutUrl
     });
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error('❌ Error creating checkout session:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to create checkout session'
