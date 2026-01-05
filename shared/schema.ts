@@ -117,6 +117,7 @@ export const magicLinks = pgTable("magic_links", {
   verificationCode: text("verification_code"), // 6-digit code for manual entry
   expiresAt: timestamp("expires_at").notNull(),
   used: boolean("used").default(false),
+  usedAt: timestamp("used_at"), // Track when first used for grace period (email scanner protection)
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -287,8 +287,8 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         currentTime: new Date().toISOString()
       });
 
-      // Find valid magic link (case-insensitive email match for backwards compatibility)
-      const [magicLink] = await db
+      // First, try to find an unused magic link
+      let [magicLink] = await db
         .select()
         .from(magicLinks)
         .where(
@@ -300,11 +300,43 @@ This link and code will expire in 1 hour. If you didn't request this login link,
           )
         );
 
+      let isGracePeriodReuse = false;
+
+      // If not found, check for recently used magic link (grace period for email scanner protection)
+      // Email security scanners often "click" links before users, so we allow reuse within 60 seconds
+      if (!magicLink) {
+        const gracePeriodSeconds = 60;
+        const gracePeriodStart = new Date(Date.now() - gracePeriodSeconds * 1000);
+
+        const [recentlyUsedLink] = await db
+          .select()
+          .from(magicLinks)
+          .where(
+            and(
+              eq(magicLinks.token, hashedToken),
+              sql`lower(${magicLinks.email}) = ${normalizedEmail}`,
+              eq(magicLinks.used, true),
+              gt(magicLinks.expiresAt, new Date()),
+              gt(magicLinks.usedAt, gracePeriodStart) // Used within grace period
+            )
+          );
+
+        if (recentlyUsedLink) {
+          console.log('🔄 Magic link was recently used, allowing grace period reuse:', {
+            usedAt: recentlyUsedLink.usedAt,
+            gracePeriodSeconds
+          });
+          magicLink = recentlyUsedLink;
+          isGracePeriodReuse = true;
+        }
+      }
+
       console.log('🔍 Magic link lookup result:', {
         found: !!magicLink,
         email: normalizedEmail,
         expired: magicLink ? magicLink.expiresAt < new Date() : 'N/A',
-        used: magicLink?.used
+        used: magicLink?.used,
+        isGracePeriodReuse
       });
 
       if (!magicLink) {
@@ -321,6 +353,7 @@ This link and code will expire in 1 hour. If you didn't request this login link,
           recent: allLinksForEmail.slice(-3).map(link => ({
             tokenPreview: link.token.substring(0, 16) + '...',
             used: link.used,
+            usedAt: link.usedAt,
             expired: link.expiresAt < new Date(),
             expiresAt: link.expiresAt,
             created: link.createdAt
@@ -331,11 +364,13 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         throw new Error('Invalid or expired magic link');
       }
 
-      // Mark magic link as used
-      await db
-        .update(magicLinks)
-        .set({ used: true })
-        .where(eq(magicLinks.id, magicLink.id));
+      // Mark magic link as used (with timestamp for grace period tracking)
+      if (!isGracePeriodReuse) {
+        await db
+          .update(magicLinks)
+          .set({ used: true, usedAt: new Date() })
+          .where(eq(magicLinks.id, magicLink.id));
+      }
 
       // Get or create user (no referral code in magic link verification)
       const user = await this.getOrCreateUser(normalizedEmail);
@@ -402,10 +437,10 @@ This link and code will expire in 1 hour. If you didn't request this login link,
         throw new Error('Invalid or expired verification code');
       }
 
-      // Mark magic link as used
+      // Mark magic link as used (with timestamp)
       await db
         .update(magicLinks)
-        .set({ used: true })
+        .set({ used: true, usedAt: new Date() })
         .where(eq(magicLinks.id, magicLink.id));
 
       // Get or create user

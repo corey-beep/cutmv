@@ -303,6 +303,8 @@ export class MemStorage implements IStorage {
       lastCreditGrantAt: null,
       stripeCustomerId: insertUser.stripeCustomerId || null,
       stripeSubscriptionId: insertUser.stripeSubscriptionId || null,
+      paymentFailedCount: 0,
+      lastPaymentFailedAt: null,
       createdAt: new Date(),
       lastLoginAt: null,
     };
