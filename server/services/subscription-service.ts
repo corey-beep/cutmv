@@ -116,11 +116,12 @@ export class SubscriptionService {
     successUrl: string,
     cancelUrl: string
   ): Promise<string> {
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId);
+    if (!plan) {
+      throw new Error(`Invalid plan ID: ${planId}`);
+    }
+
     try {
-      const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId);
-      if (!plan) {
-        throw new Error(`Invalid plan ID: ${planId}`);
-      }
 
       // Get or create customer
       const customerId = await this.getOrCreateCustomer(userId, email);
